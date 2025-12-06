@@ -423,7 +423,7 @@ async function loadRestaurants() {
 
 async function loadMenuItems() {
   try {
-    const res = await fetch(`${BASE}/restaurants/1/menu`);
+    const res = await fetch(`${BASE}/api/restaurants/1/menu`);
     const data = await res.json();
     allMenuItems = data;
   } catch (err) {
@@ -438,8 +438,9 @@ async function loadFeaturedRestaurants() {
     console.log("Response status:", res.status);
 
     if (!res.ok) {
-      throw new Error(`Failed to fetch featured restaurants: ${res.statusText}`);
-    }
+      throw new Error(`Failed to fetch featured restaurants: ${res.statusText}`)
+      ;
+  }
 
     const data = await res.json();
     console.log("Featured restaurants fetched:", data);

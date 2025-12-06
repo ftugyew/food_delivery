@@ -257,8 +257,7 @@
 </div>
 
 <script>
-const BASE = "https://food-delivery-tidq.onrender.com
-";
+const BASE = "https://food-delivery-backend-cw3m.onrender.com";
 const socket = io(BASE);
 
 // When socket connects, ensure map is seeded with restaurants and current delivery agents
@@ -423,8 +422,7 @@ async function loadPendingRestaurants() {
 
 async function approveRestaurant(id) {
   try {
-    const res = await fetch(`${BASE}/restaurants
-/approve/${id}`, {
+    const res = await fetch(`${BASE}/api/restaurants/approve/${id}`, {
       method: "PUT",
       headers: Object.assign({ "Content-Type": "application/json" }, token ? { Authorization: `Bearer ${token}` } : {})
     });
@@ -465,7 +463,7 @@ async function rejectRestaurant(id){
 
 // ===== All Menu Items =====
 async function loadAllMenu(){
-  const res = await fetch(`${BASE}/restaurants/1/menu`, {
+  const res = await fetch(`${BASE}/api/restaurants/1/menu`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {}
   });
   if (!res.ok) {
@@ -1102,8 +1100,7 @@ async function loadBanners(){
 // ===== Fullscreen Map + Route Drawing (Admin) =====
 async function loadRestaurantsForMap(){
   try {
-    const res = await fetch(`${BASE}/restaurants
-`);
+    const res = await fetch(`${BASE}/api/restaurants`);
     const arr = res.ok ? await res.json() : [];
     restaurantsById = new Map(arr.map(r => [Number(r.id), r]));
 

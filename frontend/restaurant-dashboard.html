@@ -168,8 +168,7 @@
 <div id="toast"></div>
 
 <script>
-const BASE = "https://food-delivery-tidq.onrender.com
-";
+const BASE = "https://food-delivery-backend-cw3m.onrender.com";
 const socket = io(BASE);
 
 // ✅ Auth
@@ -389,8 +388,7 @@ function logout() {
 // ===== LOAD RESTAURANT INFO =====
 async function loadRestaurantInfo() {
   try {
-    const res = await fetch(`${BASE}/restaurants
-/${restaurantId}`, {
+    const res = await fetch(`${BASE}/api/restaurants/${restaurantId}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     const restaurant = await res.json();
@@ -461,7 +459,7 @@ async function fetchRestaurantOrders() {
   const restaurantId = 1; // Replace with dynamic restaurant ID
 
   try {
-    const response = await fetch(`/api/orders/restaurant/${restaurantId}`);
+    const response = await fetch(`${BASE}/api/orders/restaurant/${restaurantId}`);
     if (!response.ok) {
       throw new Error('Failed to fetch restaurant orders');
     }

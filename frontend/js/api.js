@@ -1,4 +1,4 @@
-export const API_BASE_URL = "https://food-delivery-tidq.onrender.com";
+export const API_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com";
 
 // Expose on window for non-module scripts
 if (typeof window !== "undefined") {

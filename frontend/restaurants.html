@@ -44,7 +44,7 @@
 <script>
 async function loadAllRestaurants(){
   try{
-    const res = await fetch(`${API_BASE_URL}/restaurants`);
+    const res = await fetch(`${API_BASE_URL}/api/restaurants`);
     const data = await res.json();
     renderAll(data || []);
   }catch(e){

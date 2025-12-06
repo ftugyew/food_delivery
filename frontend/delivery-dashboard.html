@@ -14,8 +14,7 @@
     try {
       if (location.protocol === 'file:') {
         // preserve pathname if possible, otherwise redirect to default served path
-        const served = 'https://food-delivery-tidq.onrender.com
-/delivery-dashboard.html';
+        const served = 'https://food-delivery-backend-cw3m.onrender.com/delivery-dashboard.html';
         console.info('Opened via file:// — redirecting to', served);
         window.location.replace(served);
       }
@@ -113,8 +112,7 @@
 </section>
 
 <script>
-  const BASE = "https://food-delivery-tidq.onrender.com
-";
+  const BASE = "https://food-delivery-backend-cw3m.onrender.com";
   const socket = io(BASE);
   // Resolve agent id from logged-in user
   const loggedUser = (()=>{ try { return JSON.parse(localStorage.getItem('user')); } catch(_) { return null; } })();
@@ -399,8 +397,7 @@
 
   try {
     // Fetch all restaurants once (cacheable)
-    const res = await fetch(`${BASE}/restaurants
-`);
+    const res = await fetch(`${BASE}/api/restaurants`);
     const arr = res.ok ? await res.json() : [];
 
     arr.forEach(r => {

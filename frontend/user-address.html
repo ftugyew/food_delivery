@@ -83,8 +83,7 @@
 
 <!-- Your main script should start AFTER that -->
 <script>
-const BASE = "https://food-delivery-tidq.onrender.com
-";
+const BASE = "https://food-delivery-backend-cw3m.onrender.com";
 let map, marker;
 let userLat = 17.385, userLng = 78.4867;
 
@@ -194,8 +193,7 @@ async function reverseGeocode(lat, lng) {
 }
 
 // 🔌 Socket.IO
-const socket = io("https://food-delivery-tidq.onrender.com
-");
+const socket = io("https://food-delivery-backend-cw3m.onrender.com");
 socket.on("connect", () => console.log("✅ Socket connected:", socket.id));
 socket.on("pong-check", () => console.log("✅ Server ping OK"));
 socket.on("connect_error", (err) => console.error("❌ Socket error:", err.message));

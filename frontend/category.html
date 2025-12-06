@@ -36,8 +36,7 @@
   </main>
 
   <script>
-    const BASE = "https://food-delivery-tidq.onrender.com
-";
+    const BASE = "https://food-delivery-backend-cw3m.onrender.com";
     const params = new URLSearchParams(window.location.search);
     const category = params.get('name');
     document.getElementById('category-title').textContent = category ? `${category} Restaurants` : 'Category';
@@ -119,9 +118,8 @@
 
         // Fetch all restaurants and menu items
         const [restaurantsRes, menuRes] = await Promise.all([
-          fetch(`${BASE}/restaurants
-`),
-          fetch(`${BASE}/restaurants/1/menu`)
+          fetch(`${BASE}/api/restaurants`),
+          fetch(`${BASE}/api/restaurants/1/menu`)
         ]);
         const restaurants = await restaurantsRes.json();
         const menuItems = await menuRes.json();

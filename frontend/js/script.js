@@ -88,7 +88,7 @@ function applyPromo(code){
 async function placeOrderOnServer(payload){
   // payload: { user_id, restaurant_id, items, total_price, payment_method: "COD" }
   try{
-    const res = await fetch(`${API_BASE_URL}/orders`, {
+    const res = await fetch(`${API_BASE_URL}/api/orders`, {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify(payload)

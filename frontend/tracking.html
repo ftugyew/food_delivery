@@ -116,8 +116,7 @@
 
   <script>
     // Backend base
-    const SERVER = window.SERVER_BASE || 'https://food-delivery-tidq.onrender.com
-';
+    const SERVER = window.SERVER_BASE || 'https://food-delivery-backend-cw3m.onrender.com';
 
     function qs(name){ return new URLSearchParams(location.search).get(name); }
     const orderId = qs('orderId') || localStorage.getItem('last_order_id') || '1';

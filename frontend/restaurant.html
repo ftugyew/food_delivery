@@ -147,7 +147,7 @@
       // ===== Fetch restaurant info + menu from new backend =====
       console.log("Debug: Fetching restaurant & menu for restaurantId =", restaurantId);
 
-      fetch(`${API_BASE_URL}/restaurants/${restaurantId}/menu`)
+      fetch(`${API_BASE_URL}/api/restaurants/${restaurantId}/menu`)
         .then(res => {
           console.log("Debug: Menu API response status =", res.status);
           if (!res.ok) {
