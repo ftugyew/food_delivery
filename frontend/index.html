@@ -413,11 +413,19 @@ let featuredRestaurants = [];
 async function loadRestaurants() {
   try {
     const res = await fetch(`${BASE}/api/restaurants`);
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
     const data = await res.json();
+    console.log("Restaurants loaded:", data);
     allRestaurants = data;
     displayRestaurants(data);
   } catch (err) {
     console.error("Error loading restaurants:", err);
+    const container = document.getElementById("restaurants-grid");
+    if (container) {
+      container.innerHTML = `<p class="text-red-500 text-center col-span-full">Failed to load restaurants. Please try again later.</p>`;
+    }
   }
 }
 
@@ -433,14 +441,13 @@ async function loadMenuItems() {
 
 async function loadFeaturedRestaurants() {
   try {
-    console.log("Fetching featured restaurants from:", `${BASE}/api/restaurants`);
-    const res = await fetch(`${BASE}/api/restaurants`);
+    console.log("Fetching featured restaurants from:", `${BASE}/api/featured-restaurants`);
+    const res = await fetch(`${BASE}/api/featured-restaurants`);
     console.log("Response status:", res.status);
 
     if (!res.ok) {
-      throw new Error(`Failed to fetch featured restaurants: ${res.statusText}`)
-      ;
-  }
+      throw new Error(`Failed to fetch featured restaurants: ${res.statusText}`);
+    }
 
     const data = await res.json();
     console.log("Featured restaurants fetched:", data);
@@ -450,7 +457,7 @@ async function loadFeaturedRestaurants() {
     console.error("Error loading featured restaurants:", err);
     const container = document.getElementById("featured-restaurants");
     if (container) {
-      container.innerHTML = `<p class='text-red-500 text-center col-span-3'>Failed to load featured restaurants. Please try again later.</p>`;
+      container.innerHTML = `<p class='text-gray-500 text-center col-span-full'>No featured restaurants at the moment</p>`;
     }
   }
 }
@@ -500,24 +507,26 @@ function displayFeaturedRestaurants(featured) {
   if (!container) return;
   const items = (featured || []).slice(0,6);
   if (!items.length) {
-    container.innerHTML = `<p class="text-gray-500 text-center col-span-3">No featured restaurants at the moment</p>`;
+    container.innerHTML = `<p class="text-gray-500 text-center col-span-full">No featured restaurants at the moment</p>`;
     return;
   }
   container.innerHTML = items.map(r => {
     const badge = r && Number.isFinite(Number(r.position)) && Number(r.position) > 0
-      ? `<div class=\"absolute top-3 left-3 bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full text-xs font-bold z-10\">⭐ Featured #${r.position}</div>`
+      ? `<div class="absolute top-3 left-3 bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full text-xs font-bold z-10">⭐ Featured #${r.position}</div>`
       : '';
+    const imageUrl = r.image_url ? `${BASE}/uploads/${r.image_url}` : '/assets/placeholder.jpg';
     return `
-    <div class=\"card hover-lift rounded-2xl overflow-hidden cursor-pointer transition transform group relative reveal\" onclick=\"openRestaurant(${r.restaurant_id || r.id})\" role=\"button\" tabindex=\"0\">\n      ${badge}
+    <div class="card hover-lift rounded-2xl overflow-hidden cursor-pointer transition transform group relative reveal" onclick="openRestaurant(${r.restaurant_id || r.id})" role="button" tabindex="0">
+      ${badge}
       <div class="h-48">
-        <img src="${BASE}/uploads/${r.image_url || 'default.jpg'}"
-             class="h-full w-full object-cover" alt="${r.name}">
+        <img src="${imageUrl}"
+             class="h-full w-full object-cover" alt="${r.name || 'Restaurant'}" onerror="this.src='/assets/placeholder.jpg'">
       </div>
       <div class="p-6">
-        <h3 class="text-xl font-bold text-gray-800 mb-2">${r.name}</h3>
+        <h3 class="text-xl font-bold text-gray-800 mb-2">${r.name || 'Restaurant'}</h3>
         <p class="text-gray-600 mb-3">${r.cuisine || 'Multi Cuisine'}</p>
         <div class="flex items-center justify-between">
-          <span class="text-green-600 font-semibold">⭐ ${(r.avg_rating || r.rating || '4.3')} · ${r.eta || '30'} mins</span>
+          <span class="text-green-600 font-semibold">⭐ ${r.rating || '4.0'} · ${r.eta || '30'} mins</span>
           <button class="btn btn-primary btn-sm" data-ripple>View Menu</button>
         </div>
       </div>
@@ -529,34 +538,37 @@ function displayRestaurants(restaurants) {
   const container = document.getElementById("restaurants-grid");
   if (!container) return;
 
-  const items = (restaurants || []).slice(0,6);
+  const items = (restaurants || []).slice(0,12);
   if (!items.length) {
-    container.innerHTML = `<p class="text-gray-500 text-center col-span-3">No restaurants found</p>`;
+    container.innerHTML = `<p class="text-gray-500 text-center col-span-full">No restaurants available</p>`;
     return;
   }
 
-  container.innerHTML = items.map(r => `
+  container.innerHTML = items.map(r => {
+    const imageUrl = r.image_url ? `${BASE}/uploads/${r.image_url}` : '/assets/placeholder.jpg';
+    return `
     <div class="card hover-lift rounded-2xl overflow-hidden cursor-pointer transition transform group reveal" onclick="openRestaurant(${r.id})" data-ripple>
       <div class="h-48 relative">
-        <img src="${BASE}/uploads/${r.image_url || 'default.jpg'}"
-             class="h-full w-full object-cover" alt="${r.name}">
-        <span class="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full md:hidden">New</span>
+        <img src="${imageUrl}"
+             class="h-full w-full object-cover" alt="${r.name || 'Restaurant'}" onerror="this.src='/assets/placeholder.jpg'">
       </div>
       <div class="p-6">
-        <h3 class="text-xl font-bold text-gray-800 mb-2">${r.name}</h3>
-        <p class="text-gray-600 mb-3">${r.cuisine || 'Multi Cuisine'}</p>
+        <h3 class="text-xl font-bold text-gray-800 mb-2">${r.name || 'Restaurant'}</h3>
+        <p class="text-gray-600 mb-1">${r.cuisine || 'Multi Cuisine'}</p>
+        <p class="text-gray-500 text-sm mb-3">${r.address || 'Location'}</p>
         <div class="flex items-center justify-between">
-          <span class="text-green-600 font-semibold">⭐ ${(r.avg_rating || r.rating || '4.3')} · ${r.eta || '30'} mins · <span class="text-gray-500">2.5 km</span></span>
+          <span class="text-green-600 font-semibold">⭐ ${r.rating || '4.0'} · ${r.eta || '30'} mins</span>
           <button class="btn btn-primary btn-sm" data-ripple>View Menu</button>
         </div>
       </div>
-    </div>
-  `).join("");
+    </div>`;
+  }).join("");
+}
+
 // Scroll to restaurants section when clicking header link
 function scrollToRestaurants(e) {
   e.preventDefault();
   document.getElementById('restaurants').scrollIntoView({ behavior: 'smooth' });
-}
 }
 
 async function filterByCategory(cuisine) {
