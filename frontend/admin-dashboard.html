@@ -267,28 +267,39 @@ socket.on('connect', () => {
   try { loadRestaurantsForMap(); } catch(_) {}
 });
 
-// ✅ Auth check
-const user = JSON.parse(localStorage.getItem("user"));
+// ✅ Auth check - ADMIN ONLY
+const user = JSON.parse(localStorage.getItem("user") || "{}");
+const token = localStorage.getItem("token");
+
+// Validate user is admin
+if (!user || user.role !== "admin") {
+  console.warn("❌ Not an admin user. Redirecting...", user);
+  alert("Admin access required!");
+  window.location.href = "login.html";
+}
 
 // Validate token structure and expiration
-const token = localStorage.getItem("token");
 if (token) {
   try {
     const payload = JSON.parse(atob(token.split(".")[1]));
     const isExpired = payload.exp * 1000 < Date.now();
 
     if (isExpired) {
+      console.warn("⏰ Token expired");
       alert("Session expired. Please login again.");
       localStorage.removeItem("token");
+      localStorage.removeItem("user");
       window.location.href = "login.html";
     }
   } catch (err) {
-    console.error("Invalid token format:", err);
+    console.error("❌ Invalid token format:", err);
     alert("Invalid session. Please login again.");
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
     window.location.href = "login.html";
   }
 } else {
+  console.warn("⚠️ No token found");
   alert("Unauthorized! Please login again.");
   window.location.href = "login.html";
 }
@@ -302,107 +313,116 @@ function showToast(message, success = true) {
   setTimeout(() => toast.classList.remove("show"), 3000);
 }
 
-function loadAllUsersLight() {
-  console.log("👤 loadAllUsersLight() called — not yet implemented.");
+// ✅ Centralized API helper with error handling
+async function apiCall(endpoint, options = {}) {
+  try {
+    const defaultHeaders = {
+      "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` })
+    };
+    
+    const response = await fetch(`${BASE}${endpoint}`, {
+      ...options,
+      headers: { ...defaultHeaders, ...options.headers }
+    });
+
+    // Try to parse JSON, fallback to empty object
+    let data = {};
+    try {
+      const text = await response.text();
+      if (text) data = JSON.parse(text);
+    } catch (jsonErr) {
+      console.warn(`⚠️ Failed to parse JSON from ${endpoint}:`, jsonErr);
+    }
+
+    if (!response.ok) {
+      console.error(`❌ API Error [${response.status}] ${endpoint}:`, data);
+      throw new Error(data.error || data.message || `HTTP ${response.status}`);
+    }
+
+    return { success: true, data, status: response.status };
+  } catch (err) {
+    console.error(`❌ Network error on ${endpoint}:`, err);
+    return { success: false, error: err.message };
+  }
 }
 
-
-// Placeholder to avoid ReferenceError when the full map loader is defined later in another script block
-function loadRestaurantsForMap() {
-  console.log("🗺️ Map view not yet implemented (placeholder).");
+// ✅ Toast function
+function showToast(message, success = true) {
+  let toast = document.getElementById("toast");
+  if (!toast) return console.log(`[${success ? "✅" : "❌"}] ${message}`);
+  
+  toast.style.background = success ? "#22c55e" : "#ef4444";
+  toast.textContent = message;
+  toast.classList.add("show");
+  
+  setTimeout(() => {
+    toast.classList.remove("show");
+  }, 3000);
 }
 
-// ===== Stats =====
+// ===== STATS FUNCTIONS =====
 async function loadStats() {
-  try {
-    const resUsers = await fetch(`${BASE}/api/admin/users/count`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-    if (!resUsers.ok) {
-      const fallbackUrl = `${BASE}/api/admin/users?page=1&limit=100000`;
-      console.warn("Users count fetch failed:", resUsers.status, resUsers.statusText);
-      // Try fallback: fetch full users list (large limit) and count length
-      try {
-        const resUsersList = await fetch(fallbackUrl, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-        if (resUsersList.ok) {
-          const usersList = await resUsersList.json();
-          document.getElementById("totalUsers").textContent = (usersList?.length) || 0;
-        } else {
-          const raw = await resUsers.text().catch(() => "");
-          console.warn("Users count raw response:", raw);
-          document.getElementById("totalUsers").textContent = 0;
-        }
-      } catch (inner) {
-        console.error("Users count fallback error:", inner);
-        document.getElementById("totalUsers").textContent = 0;
-      }
+  console.log("📊 Loading stats...");
+  
+  // Users count
+  const usersRes = await apiCall("/api/admin/users/count");
+  if (usersRes.success) {
+    document.getElementById("totalUsers").textContent = usersRes.data?.count ?? 0;
+  } else {
+    console.warn("Users count failed, trying fallback...");
+    const fallbackRes = await apiCall("/api/admin/users");
+    if (fallbackRes.success) {
+      document.getElementById("totalUsers").textContent = Array.isArray(fallbackRes.data) ? fallbackRes.data.length : 0;
     } else {
-      const usersData = await resUsers.json();
-      document.getElementById("totalUsers").textContent = usersData.count ?? 0;
+      document.getElementById("totalUsers").textContent = 0;
     }
-  } catch (e) {
-    console.error("Users stats error:", e);
-    document.getElementById("totalUsers").textContent = 0;
   }
 
-  try {
-    const resRest = await fetch(`${BASE}/api/admin/restaurants/count`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-    if (!resRest.ok) {
-      // Fallback to full list
-      const resRestList = await fetch(`${BASE}/api/admin/restaurants`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      const restaurants = resRestList.ok ? await resRestList.json() : [];
-      document.getElementById("totalRestaurants").textContent = restaurants.length || 0;
+  // Restaurants count
+  const restRes = await apiCall("/api/admin/restaurants/count");
+  if (restRes.success) {
+    document.getElementById("totalRestaurants").textContent = restRes.data?.count ?? 0;
+  } else {
+    const fallbackRes = await apiCall("/api/admin/restaurants");
+    if (fallbackRes.success) {
+      document.getElementById("totalRestaurants").textContent = Array.isArray(fallbackRes.data) ? fallbackRes.data.length : 0;
     } else {
-      const restData = await resRest.json();
-      document.getElementById("totalRestaurants").textContent = restData.count ?? 0;
+      document.getElementById("totalRestaurants").textContent = 0;
     }
-  } catch (e) {
-    console.error("Restaurants stats error:", e);
-    document.getElementById("totalRestaurants").textContent = 0;
   }
 
-  try {
-    const resOrders = await fetch(`${BASE}/api/admin/orders/count`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-    if (!resOrders.ok) {
-      const resOrdersList = await fetch(`${BASE}/api/orders/all`);
-      const orders = resOrdersList.ok ? await resOrdersList.json() : [];
-      document.getElementById("totalOrders").textContent = orders.length || 0;
+  // Orders count
+  const ordersRes = await apiCall("/api/admin/orders/count");
+  if (ordersRes.success) {
+    document.getElementById("totalOrders").textContent = ordersRes.data?.count ?? 0;
+  } else {
+    const fallbackRes = await apiCall("/api/admin/orders");
+    if (fallbackRes.success) {
+      document.getElementById("totalOrders").textContent = Array.isArray(fallbackRes.data) ? fallbackRes.data.length : 0;
     } else {
-      const orderData = await resOrders.json();
-      document.getElementById("totalOrders").textContent = orderData.count ?? 0;
+      document.getElementById("totalOrders").textContent = 0;
     }
-  } catch (e) {
-    console.error("Orders stats error:", e);
-    document.getElementById("totalOrders").textContent = 0;
   }
+  
+  console.log("✅ Stats loaded");
 }
 
-// ===== Pending Restaurants =====
+// ===== PENDING RESTAURANTS FUNCTIONS =====
 async function loadPendingRestaurants() {
-  const res = await fetch(`${BASE}/api/admin/restaurants`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {}
-  });
-  if (!res.ok) {
-    console.error("Failed to fetch admin restaurants:", res.status, res.statusText);
-    showToast("Failed to load restaurants", false);
+  console.log("🏪 Loading pending restaurants...");
+  
+  const res = await apiCall("/api/admin/restaurants");
+  if (!res.success) {
+    showToast(`Failed to load restaurants: ${res.error}`, false);
     return;
   }
-  const data = await res.json();
-  console.log("Admin restaurants API data:", data); // 👈 debug log
 
   const list = document.getElementById("pendingRestaurants");
-  const pending = data.filter(r => (r.status || "").toLowerCase() === "pending");
+  const pending = res.data.filter(r => (r.status || "").toLowerCase() === "pending");
 
   if (!pending.length) {
-    list.innerHTML = `<p class="text-gray-500">No pending approvals</p>`;
+    list.innerHTML = `<p class="text-gray-500">✓ No pending approvals</p>`;
     return;
   }
 
@@ -410,7 +430,7 @@ async function loadPendingRestaurants() {
     <div class="card bg-green-50 p-4 rounded-xl shadow flex justify-between items-center">
       <div>
         <h3 class="font-bold">${r.name}</h3>
-        <p class="text-sm text-gray-500">${r.email}</p>
+        <p class="text-sm text-gray-500">${r.email || "N/A"}</p>
       </div>
       <div class="flex gap-2">
         <button onclick="approveRestaurant(${r.id})" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-md hover:shadow-lg">✅ Approve</button>
@@ -418,116 +438,538 @@ async function loadPendingRestaurants() {
       </div>
     </div>
   `).join("");
+  
+  console.log(`✅ Loaded ${pending.length} pending restaurants`);
 }
 
 async function approveRestaurant(id) {
   try {
-    const res = await fetch(`${BASE}/api/restaurants/approve/${id}`, {
-      method: "PUT",
-      headers: Object.assign({ "Content-Type": "application/json" }, token ? { Authorization: `Bearer ${token}` } : {})
+    console.log(`✅ Approving restaurant ${id}...`);
+    
+    const res = await apiCall(`/api/admin/restaurants/approve/${id}`, {
+      method: "PUT"
     });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Approve failed: ${res.status} ${res.statusText} ${text}`);
+
+    if (res.success) {
+      showToast(`✅ Restaurant #${id} approved`);
+      await loadPendingRestaurants();
+      await loadStats();
+    } else {
+      showToast(`Failed to approve: ${res.error}`, false);
     }
-    const data = await res.json();
-    showToast(data.message || "✅ Restaurant approved");
-    loadPendingRestaurants();
-    loadStats();
   } catch (err) {
     console.error("Approve error:", err);
-    showToast("Failed to approve restaurant", false);
+    showToast(`Error: ${err.message}`, false);
   }
 }
 
-
-async function rejectRestaurant(id){
+async function rejectRestaurant(id) {
   try {
-    const res = await fetch(`${BASE}/api/admin/restaurants/reject/${id}`, { 
-      method:"PUT",
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    console.log(`❌ Rejecting restaurant ${id}...`);
+    
+    const res = await apiCall(`/api/admin/restaurants/reject/${id}`, {
+      method: "PUT"
     });
-    const result = await res.json();
-    if (res.ok) {
-      showToast("❌ Restaurant rejected");
-      loadPendingRestaurants();
-      loadStats(); // Refresh stats
+
+    if (res.success) {
+      showToast(`❌ Restaurant #${id} rejected`);
+      await loadPendingRestaurants();
+      await loadStats();
     } else {
-      showToast("❌ " + (result.error || "Failed to reject restaurant"), false);
+      showToast(`Failed to reject: ${res.error}`, false);
     }
   } catch (err) {
-    showToast("❌ Network error", false);
     console.error("Reject error:", err);
+    showToast(`Error: ${err.message}`, false);
   }
 }
 
-// ===== All Menu Items =====
-async function loadAllMenu(){
-  const res = await fetch(`${BASE}/api/restaurants/1/menu`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {}
-  });
-  if (!res.ok) {
-    console.error("Failed to fetch menu:", res.status, res.statusText);
-    showToast("Failed to load menu", false);
+// ===== ALL MENU ITEMS =====
+async function loadAllMenu() {
+  console.log("🍽️ Loading all menu items...");
+  
+  const res = await apiCall("/api/admin/menu");
+  if (!res.success) {
+    console.warn("Admin menu endpoint not found, trying fallback...");
+    // Fallback: fetch from each restaurant (slower but works)
+    const restRes = await apiCall("/api/admin/restaurants");
+    if (!restRes.success) {
+      document.getElementById("adminMenuList").innerHTML = `<p class="text-gray-500">Failed to load menu</p>`;
+      return;
+    }
+    
+    let allItems = [];
+    for (const rest of restRes.data) {
+      const menuRes = await apiCall(`/api/menu/restaurant/${rest.id}`);
+      if (menuRes.success) {
+        allItems = allItems.concat(menuRes.data);
+      }
+    }
+    
+    renderMenuItems(allItems);
     return;
   }
-  const data = await res.json();
+
+  renderMenuItems(res.data || []);
+  console.log(`✅ Loaded ${res.data?.length || 0} menu items`);
+}
+
+function renderMenuItems(items) {
   const list = document.getElementById("adminMenuList");
-  if (!data.length) {
+  if (!items.length) {
     list.innerHTML = `<p class="text-gray-500">No menu items found</p>`;
     return;
   }
-  list.innerHTML = data.map(m => `
-    <div class="card bg-green-50 p-4 rounded-xl shadow">
-      ${m.image_url ? `<img src="${BASE}/uploads/${m.image_url}" class="h-32 w-full object-cover rounded mb-3">` : ""}
+
+  list.innerHTML = items.map(m => `
+    <div class="card bg-green-50 p-4 rounded-xl shadow hover:shadow-lg transition-shadow">
+      ${m.image_url ? `<img src="${BASE}/uploads/${m.image_url}" class="h-32 w-full object-cover rounded mb-3" alt="${m.item_name}">` : `<div class="h-32 w-full bg-gray-200 rounded mb-3 flex items-center justify-center text-gray-500">No image</div>`}
       <h3 class="font-bold text-lg">${m.item_name}</h3>
-      <p class="text-sm text-gray-500">${m.description || ''}</p>
-      <p class="text-green-600 font-semibold">₹${m.price}</p>
-      <p class="text-xs text-gray-400">Restaurant: ${m.restaurant_name}</p>
+      <p class="text-sm text-gray-600 truncate">${m.description || "No description"}</p>
+      <p class="text-green-600 font-semibold mt-2">₹${m.price}</p>
+      <p class="text-xs text-gray-500 mt-1">Restaurant: ${m.restaurant_name || m.restaurant_id}</p>
     </div>
   `).join("");
 }
 
-// ===== Delivery Boys =====
+// ===== DELIVERY BOYS =====
 async function loadDeliveryBoys() {
-  const sel = document.getElementById('agentFilter');
-  const isAll = sel && sel.value === 'all';
-  const url = isAll ? `${BASE}/api/admin/delivery?all=true` : `${BASE}/api/admin/delivery`;
-  const res = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {}
-  });
-  if (!res.ok) {
-    console.error("Failed to fetch delivery list:", res.status, res.statusText);
-    showToast("Failed to load delivery list", false);
+  console.log("🚴 Loading delivery boys...");
+  
+  const sel = document.getElementById("agentFilter");
+  const isAll = sel && sel.value === "all";
+  const endpoint = isAll ? "/api/admin/delivery?all=true" : "/api/admin/delivery";
+  
+  const res = await apiCall(endpoint);
+  if (!res.success) {
+    console.error("Delivery fetch failed, trying fallback...");
+    // Fallback
+    const altRes = await apiCall("/api/admin/agents");
+    if (!altRes.success) {
+      document.getElementById("deliveryList").innerHTML = `<p class="text-gray-500">Failed to load delivery agents</p>`;
+      return;
+    }
+    renderDeliveryBoys(altRes.data || []);
     return;
   }
-  const data = await res.json();
+
+  renderDeliveryBoys(res.data || []);
+  console.log(`✅ Loaded ${res.data?.length || 0} delivery agents`);
+}
+
+function renderDeliveryBoys(agents) {
   const list = document.getElementById("deliveryList");
-  if (!data.length) {
-    list.innerHTML = `<p class="text-gray-500">${isAll ? 'No delivery boys found' : 'No delivery boys active'}</p>`;
+  const sel = document.getElementById("agentFilter");
+  const isAll = sel && sel.value === "all";
+
+  if (!agents.length) {
+    list.innerHTML = `<p class="text-gray-500">${isAll ? "No agents found" : "No active agents"}</p>`;
     return;
   }
-  list.innerHTML = data.map(d => `
+
+  // Filter active if needed
+  const filtered = isAll ? agents : agents.filter(d => (d.status || "").toLowerCase() === "active");
+
+  list.innerHTML = filtered.map(d => `
     <div class="card bg-green-50 p-4 rounded-xl shadow flex justify-between items-center">
       <div>
         <h3 class="font-bold">${d.name}</h3>
-        <p class="text-sm text-gray-500">${d.email} | ${d.phone}</p>
+        <p class="text-sm text-gray-600">${d.email || "N/A"} | ${d.phone || "N/A"}</p>
       </div>
-      <span class="${(d.status||'').toLowerCase()==='active' ? 'text-green-600' : 'text-gray-500'} font-bold">${d.status || 'Inactive'}</span>
+      <span class="${(d.status || "").toLowerCase() === "active" ? "text-green-600 font-bold" : "text-gray-500"}">${d.status || "Inactive"}</span>
     </div>
   `).join("");
 
-  // Seed/refresh map markers with current active agents (Mappls)
+  // Seed map markers
   clearAllAgentMarkers();
-  data.forEach(d => {
+  agents.forEach(d => {
     const lat = Number(d.lat);
     const lng = Number(d.lng);
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      const orderLabel = d.current_order_id || d.order_id || d.orderId ? ` — Order #${d.current_order_id || d.order_id || d.orderId}` : '';
-      const label = `${d.name} (#${d.id})${orderLabel}`;
+      const label = `${d.name} (#${d.id})${d.current_order_id ? ` — Order #${d.current_order_id}` : ""}`;
       ensureInitMapAndMarker(d.id, lat, lng, label);
     }
   });
+}
+
+// ===== ACTIVE ORDERS =====
+async function loadActiveOrders() {
+  console.log("📦 Loading active orders...");
+  
+  const res = await apiCall("/api/admin/orders");
+  if (!res.success) {
+    showToast(`Failed to load orders: ${res.error}`, false);
+    return;
+  }
+
+  renderActiveOrders(res.data || []);
+  console.log(`✅ Loaded ${res.data?.length || 0} active orders`);
+}
+
+function renderActiveOrders(orders) {
+  const list = document.getElementById("activeOrders");
+  
+  if (!orders.length) {
+    list.innerHTML = `<p class="text-gray-500">No active orders</p>`;
+    return;
+  }
+
+  list.innerHTML = orders.map(o => {
+    let itemsText = "N/A";
+    try {
+      if (typeof o.items === "string") {
+        const parsed = JSON.parse(o.items);
+        itemsText = Array.isArray(parsed) ? parsed.map(i => i.name || i.item_name).join(", ") : o.items;
+      }
+    } catch (_) {
+      itemsText = o.items || "N/A";
+    }
+
+    return `
+      <div class="card bg-green-50 p-4 rounded-xl shadow">
+        <div class="flex justify-between items-start mb-3">
+          <div>
+            <p class="font-bold">Order #${o.id}</p>
+            <p class="text-sm text-gray-600">Items: ${itemsText}</p>
+          </div>
+          <span class="px-2 py-1 text-xs font-semibold rounded ${getStatusColor(o.status)}">${o.status || "Unknown"}</span>
+        </div>
+        <p class="text-sm text-gray-600 mb-3">Delivery to: ${o.delivery_address || "N/A"}</p>
+        <button onclick="assignAgent(${o.id})" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200">
+          🤖 Auto-Assign Agent
+        </button>
+      </div>
+    `;
+  }).join("");
+}
+
+function getStatusColor(status) {
+  const statusMap = {
+    "pending": "bg-yellow-100 text-yellow-800",
+    "confirmed": "bg-blue-100 text-blue-800",
+    "preparing": "bg-purple-100 text-purple-800",
+    "ready": "bg-indigo-100 text-indigo-800",
+    "picked_up": "bg-cyan-100 text-cyan-800",
+    "delivered": "bg-green-100 text-green-800",
+    "cancelled": "bg-red-100 text-red-800"
+  };
+  return statusMap[status?.toLowerCase()] || "bg-gray-100 text-gray-800";
+}
+
+async function assignAgent(orderId) {
+  try {
+    console.log(`🤖 Auto-assigning agent to order ${orderId}...`);
+    
+    const res = await apiCall(`/api/admin/orders/${orderId}/assign`, {
+      method: "POST"
+    });
+
+    if (res.success) {
+      showToast(`✅ Agent assigned to order #${orderId}`);
+      await loadActiveOrders();
+      await loadStats();
+    } else {
+      showToast(`Failed to assign: ${res.error}`, false);
+    }
+  } catch (err) {
+    console.error("Assign error:", err);
+    showToast(`Error: ${err.message}`, false);
+  }
+}
+
+// ===== FEATURED & TOP RESTAURANTS =====
+async function loadFeaturedRestaurants() {
+  console.log("🌟 Loading featured restaurants...");
+  
+  const res = await apiCall("/api/admin/featured-restaurants");
+  if (!res.success) {
+    console.warn("Featured restaurants failed:", res.error);
+    document.getElementById("featuredRestaurantsList").innerHTML = `<p class="text-gray-500">Failed to load featured restaurants</p>`;
+    return;
+  }
+
+  renderFeaturedRestaurants(res.data || []);
+  console.log(`✅ Loaded ${res.data?.length || 0} featured restaurants`);
+}
+
+function renderFeaturedRestaurants(restaurants) {
+  const list = document.getElementById("featuredRestaurantsList");
+  
+  if (!restaurants.length) {
+    list.innerHTML = `<p class="text-gray-500">No featured restaurants yet</p>`;
+    return;
+  }
+
+  list.innerHTML = restaurants.map(fr => `
+    <div class="card bg-green-50 p-4 rounded-xl shadow flex justify-between items-center">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+          <span class="text-green-600 font-bold text-lg">#${fr.position}</span>
+        </div>
+        <div>
+          <h3 class="font-bold text-gray-800">${fr.name}</h3>
+          <p class="text-sm text-gray-600">ID: ${fr.restaurant_id} | ${fr.cuisine || "Multi-Cuisine"}</p>
+          <span class="inline-block px-2 py-1 text-xs rounded-full ${fr.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}">
+            ${fr.is_active ? "✓ Active" : "Inactive"}
+          </span>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="toggleFeaturedRestaurant(${fr.id}, ${fr.is_active})" 
+          class="px-4 py-2 rounded-lg text-sm font-medium text-white transition-all duration-200 ${fr.is_active ? "bg-yellow-500 hover:bg-yellow-600" : "bg-green-600 hover:bg-green-700"}">
+          ${fr.is_active ? "Deactivate" : "Activate"}
+        </button>
+        <button onclick="removeFeaturedRestaurant(${fr.id})" 
+          class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200">
+          Remove
+        </button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function addFeaturedRestaurant() {
+  const restaurantId = document.getElementById("featuredRestaurantId").value;
+  const position = document.getElementById("featuredPosition").value || 1;
+
+  if (!restaurantId) {
+    showToast("Please enter a restaurant ID", false);
+    return;
+  }
+
+  try {
+    const res = await apiCall("/api/admin/featured-restaurants", {
+      method: "POST",
+      body: JSON.stringify({ restaurant_id: parseInt(restaurantId), position: parseInt(position) })
+    });
+
+    if (res.success) {
+      showToast("✅ Restaurant added to featured list!");
+      document.getElementById("featuredRestaurantId").value = "";
+      document.getElementById("featuredPosition").value = "";
+      await loadFeaturedRestaurants();
+    } else {
+      showToast(`Failed: ${res.error}`, false);
+    }
+  } catch (err) {
+    showToast(`Error: ${err.message}`, false);
+  }
+}
+
+async function removeFeaturedRestaurant(id) {
+  if (!confirm("Remove this restaurant from featured list?")) return;
+
+  try {
+    const res = await apiCall(`/api/admin/featured-restaurants/${id}`, {
+      method: "DELETE"
+    });
+
+    if (res.success) {
+      showToast("✅ Restaurant removed");
+      await loadFeaturedRestaurants();
+    } else {
+      showToast(`Failed: ${res.error}`, false);
+    }
+  } catch (err) {
+    showToast(`Error: ${err.message}`, false);
+  }
+}
+
+async function toggleFeaturedRestaurant(id, currentStatus) {
+  try {
+    const res = await apiCall(`/api/admin/featured-restaurants/${id}/toggle`, {
+      method: "PUT"
+    });
+
+    if (res.success) {
+      showToast(`✅ Restaurant ${res.data?.is_active ? "activated" : "deactivated"}`);
+      await loadFeaturedRestaurants();
+    } else {
+      showToast(`Failed: ${res.error}`, false);
+    }
+  } catch (err) {
+    showToast(`Error: ${err.message}`, false);
+  }
+}
+
+// ===== TOP RESTAURANTS =====
+async function loadTopRestaurants() {
+  console.log("⭐ Loading top restaurants...");
+  
+  const res = await apiCall("/api/admin/top-restaurants");
+  if (!res.success) {
+    console.warn("Top restaurants failed:", res.error);
+    document.getElementById("topRestaurantsList").innerHTML = `<p class="text-gray-500">Failed to load top restaurants</p>`;
+    return;
+  }
+
+  renderTopRestaurants(res.data || []);
+  console.log(`✅ Loaded ${res.data?.length || 0} top restaurants`);
+}
+
+function renderTopRestaurants(restaurants) {
+  const list = document.getElementById("topRestaurantsList");
+  
+  if (!restaurants.length) {
+    list.innerHTML = `<p class="text-gray-500">No top restaurants yet</p>`;
+    return;
+  }
+
+  list.innerHTML = restaurants.map(tr => `
+    <div class="card bg-blue-50 p-4 rounded-xl shadow flex justify-between items-center">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+          <span class="text-blue-600 font-bold text-lg">#${tr.position}</span>
+        </div>
+        <div>
+          <h3 class="font-bold text-gray-800">${tr.name}</h3>
+          <p class="text-sm text-gray-600">ID: ${tr.restaurant_id} | ${tr.cuisine || "Multi-Cuisine"}</p>
+          <span class="inline-block px-2 py-1 text-xs rounded-full ${tr.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}">
+            ${tr.is_active ? "✓ Active" : "Inactive"}
+          </span>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="toggleTopRestaurant(${tr.id}, ${tr.is_active})" 
+          class="px-4 py-2 rounded-lg text-sm font-medium text-white transition-all duration-200 ${tr.is_active ? "bg-yellow-500 hover:bg-yellow-600" : "bg-blue-600 hover:bg-blue-700"}">
+          ${tr.is_active ? "Deactivate" : "Activate"}
+        </button>
+        <button onclick="removeTopRestaurant(${tr.id})" 
+          class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200">
+          Remove
+        </button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function addTopRestaurant() {
+  const restaurantId = document.getElementById("topRestaurantId").value;
+  const position = document.getElementById("topPosition").value || 1;
+
+  if (!restaurantId) {
+    showToast("Please enter a restaurant ID", false);
+    return;
+  }
+
+  try {
+    const res = await apiCall("/api/admin/top-restaurants", {
+      method: "POST",
+      body: JSON.stringify({ restaurant_id: parseInt(restaurantId), position: parseInt(position) })
+    });
+
+    if (res.success) {
+      showToast("✅ Restaurant added to top list!");
+      document.getElementById("topRestaurantId").value = "";
+      document.getElementById("topPosition").value = "";
+      await loadTopRestaurants();
+    } else {
+      showToast(`Failed: ${res.error}`, false);
+    }
+  } catch (err) {
+    showToast(`Error: ${err.message}`, false);
+  }
+}
+
+async function removeTopRestaurant(id) {
+  if (!confirm("Remove this restaurant from top list?")) return;
+
+  try {
+    const res = await apiCall(`/api/admin/top-restaurants/${id}`, {
+      method: "DELETE"
+    });
+
+    if (res.success) {
+      showToast("✅ Restaurant removed");
+      await loadTopRestaurants();
+    } else {
+      showToast(`Failed: ${res.error}`, false);
+    }
+  } catch (err) {
+    showToast(`Error: ${err.message}`, false);
+  }
+}
+
+async function toggleTopRestaurant(id, currentStatus) {
+  try {
+    const res = await apiCall(`/api/admin/top-restaurants/${id}/toggle`, {
+      method: "PUT"
+    });
+
+    if (res.success) {
+      showToast(`✅ Restaurant ${res.data?.is_active ? "activated" : "deactivated"}`);
+      await loadTopRestaurants();
+    } else {
+      showToast(`Failed: ${res.error}`, false);
+    }
+  } catch (err) {
+    showToast(`Error: ${err.message}`, false);
+  }
+}
+
+// ===== BANNERS MANAGEMENT =====
+async function loadBanners() {
+  console.log("🖼️ Loading banners...");
+  
+  const res = await apiCall("/api/admin/banners");
+  if (!res.success) {
+    console.warn("Banners load failed:", res.error);
+    return;
+  }
+
+  const list = document.getElementById("bannersList");
+  if (!list) return;
+
+  if (!res.data || !res.data.length) {
+    list.innerHTML = `<p class="text-gray-500">No banners uploaded</p>`;
+    return;
+  }
+
+  list.innerHTML = res.data.map(b => `
+    <div class="relative border rounded-xl overflow-hidden group hover:shadow-lg transition-shadow">
+      <img src="${BASE}/uploads/${b.image_url}" class="w-full h-40 object-cover" alt="Banner #${b.id}">
+      <button onclick="removeBanner(${b.id})" title="Remove" class="absolute top-2 right-2 bg-white/90 text-gray-700 hover:bg-white rounded-full w-8 h-8 flex items-center justify-center shadow hover:shadow-lg transition-all">×</button>
+      <div class="absolute bottom-0 left-0 right-0 text-xs text-gray-600 bg-white/80 px-2 py-1 flex justify-between">
+        <span>#${b.id}</span>
+        <span>${b.is_active ? "✓ Active" : "Inactive"}</span>
+      </div>
+    </div>
+  `).join("");
+
+  console.log(`✅ Loaded ${res.data.length} banners`);
+}
+
+async function removeBanner(id) {
+  if (!confirm("Remove this banner?")) return;
+
+  try {
+    const res = await apiCall(`/api/admin/banners/${id}`, {
+      method: "DELETE"
+    });
+
+    if (res.success) {
+      showToast("✅ Banner removed");
+      await loadBanners();
+    } else {
+      showToast(`Failed: ${res.error}`, false);
+    }
+  } catch (err) {
+    showToast(`Error: ${err.message}`, false);
+  }
+}
+
+// ===== FETCH ALL ORDERS =====
+async function fetchAllOrders() {
+  console.log("📋 Fetching all orders...");
+  
+  const res = await apiCall("/api/orders");
+  if (!res.success) {
+    console.warn("Orders fetch failed:", res.error);
+    return;
+  }
+
+  console.log(`✅ Fetched ${res.data?.length || 0} orders`);
+  return res.data;
 }
 
 // ===== Delivery Boys Location Map (Mappls) =====
@@ -719,46 +1161,86 @@ document.addEventListener('change', (e) => {
 
 // ===== Active Orders =====
 async function loadActiveOrders() {
-  const res = await fetch(`${BASE}/api/admin/orders`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {}
-  });
-  if (!res.ok) {
-    console.error("Failed to fetch active orders:", res.status, res.statusText);
-    showToast("Failed to load active orders", false);
+  console.log("📦 Loading active orders...");
+  
+  const res = await apiCall("/api/admin/orders");
+  if (!res.success) {
+    showToast(`Failed to load orders: ${res.error}`, false);
     return;
   }
-  const orders = await res.json();
+
+  renderActiveOrders(res.data || []);
+  console.log(`✅ Loaded ${res.data?.length || 0} active orders`);
+}
+
+function renderActiveOrders(orders) {
   const list = document.getElementById("activeOrders");
+  
   if (!orders.length) {
     list.innerHTML = `<p class="text-gray-500">No active orders</p>`;
     return;
   }
-  list.innerHTML = orders.map(o => `
-    <div class="card bg-green-50 p-3 rounded shadow">
-      <p><strong>Order #${o.id} ${o.order_id ? '('+o.order_id+')' : ''}</strong> - ${o.items ? JSON.parse(o.items).map(i => i.name).join(", ") : ""}</p>
-      <p class="text-sm text-gray-600">Status: ${o.status}</p>
-      <div class="mt-2">
-        <button onclick="assignAgent(${o.id})" class="bg-blue-600 text-white px-3 py-1 rounded text-sm" data-wish>Auto-Assign Agent</button>
+
+  list.innerHTML = orders.map(o => {
+    let itemsText = "N/A";
+    try {
+      if (typeof o.items === "string") {
+        const parsed = JSON.parse(o.items);
+        itemsText = Array.isArray(parsed) ? parsed.map(i => i.name || i.item_name).join(", ") : o.items;
+      }
+    } catch (_) {
+      itemsText = o.items || "N/A";
+    }
+
+    return `
+      <div class="card bg-green-50 p-4 rounded-xl shadow">
+        <div class="flex justify-between items-start mb-3">
+          <div>
+            <p class="font-bold">Order #${o.id}</p>
+            <p class="text-sm text-gray-600">Items: ${itemsText}</p>
+          </div>
+          <span class="px-2 py-1 text-xs font-semibold rounded ${getStatusColor(o.status)}">${o.status || "Unknown"}</span>
+        </div>
+        <p class="text-sm text-gray-600 mb-3">Delivery to: ${o.delivery_address || "N/A"}</p>
+        <button onclick="assignAgent(${o.id})" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200">
+          🤖 Auto-Assign Agent
+        </button>
       </div>
-    </div>
-  `).join("");
+    `;
+  }).join("");
 }
 
-async function assignAgent(orderId){
+function getStatusColor(status) {
+  const statusMap = {
+    "pending": "bg-yellow-100 text-yellow-800",
+    "confirmed": "bg-blue-100 text-blue-800",
+    "preparing": "bg-purple-100 text-purple-800",
+    "ready": "bg-indigo-100 text-indigo-800",
+    "picked_up": "bg-cyan-100 text-cyan-800",
+    "delivered": "bg-green-100 text-green-800",
+    "cancelled": "bg-red-100 text-red-800"
+  };
+  return statusMap[status?.toLowerCase()] || "bg-gray-100 text-gray-800";
+}
+
+async function assignAgent(orderId) {
   try {
-    const res = await fetch(`${BASE}/api/admin/orders/${orderId}/assign`, { 
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    console.log(`🤖 Auto-assigning agent to order ${orderId}...`);
+    
+    const res = await apiCall(`/api/admin/orders/${orderId}/assign`, {
+      method: "POST"
     });
-    const data = await res.json();
-    if (res.ok) {
-      showToast(`✅ Assigned agent #${data.agent_id} to order #${orderId}`);
-      loadActiveOrders();
+
+    if (res.success) {
+      showToast(`✅ Agent assigned to order #${orderId}`);
+      await loadActiveOrders();
+      await loadStats();
     } else {
-      showToast('❌ ' + (data.error || 'Failed to assign agent'), false);
+      showToast(`Failed to assign: ${res.error}`, false);
     }
-  } catch (e) {
-    showToast('❌ Network error', false);
+  } catch (err) {
+    console.error("Assign error:", err);
+    showToast(`Error: ${err.message}`, false);
   }
 }
 
@@ -766,566 +1248,530 @@ async function assignAgent(orderId){
 socket.on("newOrder", (order) => {
   const noti = document.createElement("li");
   noti.className = "bg-green-100 p-3 rounded shadow";
-  noti.textContent = `📦 New Order #${order.id} placed by ${order.customer_name}`;
+  noti.textContent = `📦 New Order #${order.id} placed by ${order.customer_name || "Customer"}`;
   document.getElementById("notifications").prepend(noti);
+  console.log("🔔 New order notification:", order);
   loadActiveOrders();
+  loadStats();
 });
-
-// ===== Featured Restaurants Management =====
-// ===== Top Restaurants Management =====
-async function addTopRestaurant() {
-  const restaurantId = document.getElementById("topRestaurantId").value;
-  const position = document.getElementById("topPosition").value || 1;
-  if (!restaurantId) {
-    showToast("Please enter a restaurant ID", false);
-    return;
-  }
-  try {
-    const res = await fetch(`${BASE}/api/admin/top-restaurants`, {
-      method: "POST",
-      headers: Object.assign({ "Content-Type": "application/json" }, token ? { Authorization: `Bearer ${token}` } : {}),
-      body: JSON.stringify({ restaurant_id: parseInt(restaurantId), position: parseInt(position) })
-    });
-    const result = await res.json();
-    if (res.ok) {
-      showToast("✅ Restaurant added to top list!");
-      document.getElementById("topRestaurantId").value = "";
-      document.getElementById("topPosition").value = "";
-      loadTopRestaurants();
-    } else {
-      showToast("❌ " + (result.error || "Failed to add restaurant"), false);
-    }
-  } catch (err) {
-    showToast("❌ Network error", false);
-    console.error("Add top restaurant error:", err);
-  }
-}
-async function loadTopRestaurants() {
-  try {
-    console.log("Fetching top restaurants from:", `${BASE}/api/admin/top-restaurants`);
-    const res = await fetch(`${BASE}/api/admin/top-restaurants`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-    console.log("Response status:", res.status);
-
-    if (!res.ok) {
-      throw new Error(`Failed to fetch top restaurants: ${res.statusText}`);
-    }
-
-    // Debug: log raw response body before parsing JSON
-    const raw = await res.text();
-    console.log("Top restaurants raw response:", raw);
-    const data = JSON.parse(raw || "[]");
-    console.log("Top restaurants fetched:", data);
-
-    const list = document.getElementById("topRestaurantsList");
-    if (!data.length) {
-      list.innerHTML = `<p class="text-gray-500">No top restaurants found</p>`;
-      return;
-    }
-
-    list.innerHTML = data.map(tr => `
-      <div class="card bg-blue-50 p-4 rounded-xl shadow flex justify-between items-center">
-        <div>
-          <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-2">
-            <span class="text-blue-600 font-bold">#${tr.position}</span>
-          </div>
-          <h3 class="font-bold text-gray-800">${tr.name}</h3>
-          <p class="text-sm text-gray-500">ID: ${tr.restaurant_id} | ${tr.cuisine || 'Multi Cuisine'}</p>
-          <span class="inline-block px-2 py-1 text-xs rounded-full ${tr.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-            ${tr.is_active ? 'Active' : 'Inactive'}
-          </span>
-        </div>
-        <div class="flex gap-2">
-          <button onclick="toggleTopRestaurant(${tr.id}, ${tr.is_active})" class="px-3 py-1 rounded text-sm ${tr.is_active ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-blue-500 hover:bg-blue-600'} text-white transition-all duration-200">
-            ${tr.is_active ? 'Deactivate' : 'Activate'}
-          </button>
-          <button onclick="removeTopRestaurant(${tr.id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-all duration-200">Remove</button>
-        </div>
-      </div>
-    `).join("");
-  } catch (err) {
-    console.error("Error loading top restaurants:", err);
-    showToast("Failed to load top restaurants", false);
-  }
-}
-
-async function toggleTopRestaurant(id, currentStatus) {
-  try {
-    const res = await fetch(`${BASE}/api/admin/top-restaurants/${id}/toggle`, {
-      method: "PUT",
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-    const result = await res.json();
-    if (res.ok) {
-      showToast(`✅ Restaurant ${result.is_active ? 'activated' : 'deactivated'}`);
-      loadTopRestaurants();
-    } else {
-      showToast("❌ " + (result.error || "Failed to toggle top restaurant"), false);
-    }
-  } catch (err) {
-    showToast("❌ Network error", false);
-    console.error("Toggle top restaurant error:", err);
-  }
-}
-async function loadFeaturedRestaurants() {
-  try {
-    console.log("Fetching featured restaurants from:", `${BASE}/api/admin/featured-restaurants`);
-    const res = await fetch(`${BASE}/api/admin/featured-restaurants`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-    console.log("Response status:", res.status);
-
-    if (!res.ok) {
-      throw new Error(`Failed to fetch featured restaurants: ${res.statusText}`);
-    }
-
-    // Debug: log raw response body before parsing JSON
-    const raw = await res.text();
-    console.log("Featured restaurants raw response:", raw);
-    const data = JSON.parse(raw || "[]");
-    console.log("Fetched featured restaurants data:", data);
-
-    const list = document.getElementById("featuredRestaurantsList");
-    if (!data.length) {
-      list.innerHTML = `<p class="text-gray-500">No featured restaurants yet</p>`;
-      return;
-    }
-    
-    list.innerHTML = data.map(fr => `
-      <div class="card bg-green-50 p-4 rounded-xl shadow flex justify-between items-center">
-        <div class="flex items-center gap-4">
-          <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-            <span class="text-green-600 font-bold">#${fr.position}</span>
-          </div>
-          <div>
-            <h3 class="font-bold text-gray-800">${fr.name}</h3>
-            <p class="text-sm text-gray-500">ID: ${fr.restaurant_id} | ${fr.cuisine || 'Multi Cuisine'}</p>
-            <span class="inline-block px-2 py-1 text-xs rounded-full ${fr.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-              ${fr.is_active ? 'Active' : 'Inactive'}
-            </span>
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <button onclick="toggleFeaturedRestaurant(${fr.id}, ${fr.is_active})" 
-                  class="px-3 py-1 rounded text-sm ${fr.is_active ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-500 hover:bg-green-600'} text-white transition-all duration-200">
-            ${fr.is_active ? 'Deactivate' : 'Activate'}
-          </button>
-          <button onclick="removeFeaturedRestaurant(${fr.id})" 
-                  class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-all duration-200">
-            Remove
-          </button>
-        </div>
-      </div>
-    `).join("");
-  } catch (err) {
-    console.error("Error loading featured restaurants:", err);
-    showToast("Failed to load featured restaurants", false);
-  }
-}
-
-async function addFeaturedRestaurant() {
-  const restaurantId = document.getElementById("featuredRestaurantId").value;
-  const position = document.getElementById("featuredPosition").value || 1;
-  
-  if (!restaurantId) {
-    showToast("Please enter a restaurant ID", false);
-    return;
-  }
-  
-  try {
-    const res = await fetch(`${BASE}/api/admin/featured-restaurants`, {
-      method: "POST",
-      headers: Object.assign({ "Content-Type": "application/json" }, token ? { Authorization: `Bearer ${token}` } : {}),
-      body: JSON.stringify({ restaurant_id: parseInt(restaurantId), position: parseInt(position) })
-    });
-    
-    const result = await res.json();
-    if (res.ok) {
-      showToast("✅ Restaurant added to featured list!");
-      document.getElementById("featuredRestaurantId").value = "";
-      document.getElementById("featuredPosition").value = "";
-      loadFeaturedRestaurants();
-    } else {
-      showToast("❌ " + (result.error || "Failed to add restaurant"), false);
-    }
-  } catch (err) {
-    showToast("❌ Network error", false);
-    console.error("Add featured restaurant error:", err);
-  }
-}
-
-async function removeFeaturedRestaurant(id) {
-  if (!confirm("Are you sure you want to remove this restaurant from featured list?")) return;
-  
-  try {
-    const res = await fetch(`${BASE}/api/admin/featured-restaurants/${id}`, {
-      method: "DELETE",
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-    
-    const result = await res.json();
-    if (res.ok) {
-      showToast("✅ Restaurant removed from featured list");
-      loadFeaturedRestaurants();
-    } else {
-      showToast("❌ " + (result.error || "Failed to remove restaurant"), false);
-    }
-  } catch (err) {
-    showToast("❌ Network error", false);
-    console.error("Remove featured restaurant error:", err);
-  }
-}
-
-async function toggleFeaturedRestaurant(id, currentStatus) {
-  try {
-    const res = await fetch(`${BASE}/api/admin/featured-restaurants/${id}/toggle`, {
-      method: "PUT",
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-    
-    const result = await res.json();
-    if (res.ok) {
-      showToast(`✅ Restaurant ${result.is_active ? 'activated' : 'deactivated'}`);
-      loadFeaturedRestaurants();
-    } else {
-      showToast("❌ " + (result.error || "Failed to toggle restaurant"), false);
-    }
-  } catch (err) {
-    showToast("❌ Network error", false);
-    console.error("Toggle featured restaurant error:", err);
-  }
-}
-
-// Fetch and display all orders for the admin
-async function fetchAllOrders() {
-  try {
-    const response = await fetch(`${BASE}/api/orders`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-    if (!response.ok) {
-      throw new Error('Failed to fetch orders');
-    }
-
-    const orders = await response.json();
-    console.log('All Orders:', orders);
-
-    // Display orders dynamically (example)
-    const ordersContainer = document.getElementById('ordersContainer');
-    if (!ordersContainer) return; // Guard if container isn't present on this page
-    ordersContainer.innerHTML = orders.map(order => `
-      <div class="order">
-        <p><b>Order ID:</b> ${order.id}</p>
-        <p><b>Status:</b> ${order.status}</p>
-        <p><b>Total:</b> ₹${order.total}</p>
-      </div>
-    `).join('');
-  } catch (error) {
-    console.error('Error fetching orders:', error);
-  }
-}
-
-document.addEventListener('DOMContentLoaded', fetchAllOrders);
 
 // ===== Logout =====
 function logout() {
+  console.log("👋 User logging out...");
   localStorage.removeItem("user");
   localStorage.removeItem("token");
   window.location.href = "login.html";
 }
 
-// ===== Init =====
-loadStats();
-loadPendingRestaurants();
-loadAllMenu();
-loadDeliveryBoys();
-loadActiveOrders();
-loadFeaturedRestaurants();
-loadTopRestaurants();
-loadRestaurantsForMap();
-loadAllUsersLight();
-loadBanners();
-
-// ===== Charts Demo =====
-new Chart(document.getElementById("ordersChart"), {
-  type: "bar",
-  data: {
-    labels: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
-    datasets: [{
-      label: "Orders",
-      data: [40,55,30,60,70,90,50],
-      backgroundColor: "rgba(34,197,94,0.6)"
-    }]
+// ===== Init On Page Load =====
+document.addEventListener("DOMContentLoaded", async () => {
+  console.log("🚀 Admin Dashboard Initializing...");
+  
+  try {
+    // Load all data in parallel
+    console.log("📥 Loading dashboard data...");
+    await Promise.all([
+      loadStats(),
+      loadPendingRestaurants(),
+      loadAllMenu(),
+      loadDeliveryBoys(),
+      loadActiveOrders(),
+      loadFeaturedRestaurants(),
+      loadTopRestaurants(),
+      loadBanners(),
+      loadRestaurantsForMap()
+    ]);
+    
+    console.log("✅ Dashboard ready!");
+    showToast("Dashboard loaded successfully");
+  } catch (err) {
+    console.error("❌ Dashboard initialization error:", err);
+    showToast("Error loading dashboard", false);
   }
 });
-new Chart(document.getElementById("revenueChart"), {
-  type: "line",
-  data: {
-    labels: ["Jan","Feb","Mar","Apr","May","Jun"],
-    datasets: [{
-      label: "Revenue",
-      data: [20000,25000,18000,30000,40000,35000],
-      borderColor: "rgba(34,197,94,1)",
-      backgroundColor: "rgba(34,197,94,0.2)",
-      fill: true
-    }]
+
+// Initialize Charts (demo data)
+setTimeout(() => {
+  try {
+    const ordersCanvas = document.getElementById("ordersChart");
+    const revenueCanvas = document.getElementById("revenueChart");
+    
+    if (ordersCanvas) {
+      new Chart(ordersCanvas, {
+        type: "bar",
+        data: {
+          labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+          datasets: [{
+            label: "Orders",
+            data: [40, 55, 30, 60, 70, 90, 50],
+            backgroundColor: "rgba(34,197,94,0.6)",
+            borderColor: "rgba(34,197,94,1)",
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: true } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+    
+    if (revenueCanvas) {
+      new Chart(revenueCanvas, {
+        type: "line",
+        data: {
+          labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+          datasets: [{
+            label: "Revenue",
+            data: [20000, 25000, 18000, 30000, 40000, 35000],
+            borderColor: "rgba(34,197,94,1)",
+            backgroundColor: "rgba(34,197,94,0.2)",
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: true } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+    
+    console.log("📊 Charts initialized");
+  } catch (err) {
+    console.warn("⚠️ Chart initialization skipped:", err.message);
   }
 });
 </script>
 <script>
-// ===== Banners management =====
-async function loadBanners(){
-  try {
-    const res = await fetch(`${BASE}/api/admin/banners`);
-    if(!res.ok){ console.warn('banners fetch failed'); return; }
-    const data = await res.json();
-    const list = document.getElementById('bannersList');
-    if(!list) return;
-    if(!data.length){ list.innerHTML = `<p class="text-gray-500">No banners uploaded</p>`; return; }
-    list.innerHTML = data.map(b => `
-      <div class="relative border rounded-xl overflow-hidden group">
-        <img src="${BASE}/uploads/${b.image_url}" class="w-full h-40 object-cover" alt="Banner #${b.id}">
-        <button onclick="removeBanner(${b.id})" title="Remove" class="absolute top-2 right-2 bg-white/90 text-gray-700 hover:bg-white rounded-full w-8 h-8 flex items-center justify-center shadow">×</button>
-        <div class="absolute bottom-0 left-0 right-0 text-xs text-gray-600 bg-white/70 px-2 py-1 flex justify-between">
-          <span>#${b.id}</span>
-          <span>${b.is_active ? 'Active' : 'Inactive'}</span>
-        </div>
-      </div>
-    `).join('');
-  } catch(e){ console.error('loadBanners error', e); }
+// ===== Banners Form Submission =====
+const bannerForm = document.getElementById("bannerForm");
+if (bannerForm) {
+  bannerForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    
+    const file = document.getElementById("bannerFile").files[0];
+    if (!file) {
+      showToast("Select an image", false);
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append("banner", file);
+
+    try {
+      console.log("📤 Uploading banner...");
+      const res = await fetch(`${BASE}/api/admin/banners`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd
+      });
+
+      const result = await res.json();
+      if (res.ok) {
+        showToast("✅ Banner uploaded");
+        bannerForm.reset();
+        await loadBanners();
+      } else {
+        showToast(`Failed: ${result.error || "Upload failed"}`, false);
+      }
+    } catch (err) {
+      showToast(`Error: ${err.message}`, false);
+      console.error("Banner upload error:", err);
+    }
+  });
 }
 
+async function removeBanner(id) {
+  if (!confirm("Remove this banner?")) return;
+
+  try {
+    console.log(`🗑️ Removing banner ${id}...`);
+    const res = await fetch(`${BASE}/api/admin/banners/${id}`, {
+      method: "DELETE",
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+
+    const result = await res.json();
+    if (res.ok) {
+      showToast("✅ Banner removed");
+      await loadBanners();
+    } else {
+      showToast(`Failed: ${result.error || "Delete failed"}`, false);
+    }
+  } catch (err) {
+    showToast(`Error: ${err.message}`, false);
+    console.error("Banner removal error:", err);
+  }
+}
 </script>
+
 <script>
 // ===== Fullscreen Map + Route Drawing (Admin) =====
-async function loadRestaurantsForMap(){
+async function loadRestaurantsForMap() {
   try {
-    const res = await fetch(`${BASE}/api/restaurants`);
-    const arr = res.ok ? await res.json() : [];
+    console.log("🗺️ Loading restaurants for map...");
+    const res = await apiCall("/api/restaurants");
+    if (!res.success) {
+      console.warn("Restaurants load failed for map");
+      return;
+    }
+
+    const arr = res.data || [];
     restaurantsById = new Map(arr.map(r => [Number(r.id), r]));
 
-    // Use ID input instead of select
-    const input = document.getElementById('restaurantIdInput');
+    // Setup restaurant ID input
+    const input = document.getElementById("restaurantIdInput");
     if (input) {
-      input.value = '';
-      input.addEventListener('change', (e) => {
+      input.value = "";
+      input.addEventListener("change", (e) => {
         const id = Number(e.target.value);
         clearRestaurantMarker();
         if (!id) return;
-        const r = restaurantsById.get(Number(id));
-            const rlat = r?.latitude ?? r?.lat;
-            const rlng = r?.longitude ?? r?.lng;
-            if (r && Number.isFinite(Number(rlat)) && Number.isFinite(Number(rlng))) {
-              placeRestaurantMarker(id, Number(rlat), Number(rlng), false);
-              try { map.setCenter([Number(rlat), Number(rlng)]); map.setZoom(15); } catch(_){ }
+
+        const r = restaurantsById.get(id);
+        const rlat = r?.latitude ?? r?.lat;
+        const rlng = r?.longitude ?? r?.lng;
+
+        if (r && Number.isFinite(Number(rlat)) && Number.isFinite(Number(rlng))) {
+          placeRestaurantMarker(id, Number(rlat), Number(rlng), false);
+          try {
+            if (map) {
+              map.setCenter([Number(rlat), Number(rlng)]);
+              map.setZoom(15);
+            }
+          } catch (_) {}
         } else {
-          showToast('Click on the map to set location for entered restaurant id');
+          showToast("Click on the map to set location", false);
         }
       });
 
-      const clearBtn = document.getElementById('btnClearRestaurantMarker');
-      if (clearBtn) clearBtn.addEventListener('click', ()=>{ clearRestaurantMarker(); input.value = ''; });
+      const clearBtn = document.getElementById("btnClearRestaurantMarker");
+      if (clearBtn) {
+        clearBtn.addEventListener("click", () => {
+          clearRestaurantMarker();
+          input.value = "";
+        });
+      }
     }
-    // ——— Load saved restaurant markers (if coordinates present)
+
+    // Load saved restaurant markers
     try {
-      // Use the convenience endpoint if available, else use the fetched arr
-  const rRes = await fetch(`${BASE}/api/get-restaurants`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-  const saved = rRes.ok ? await rRes.json() : arr;
-      // Clear any previous saved markers
-      restaurantSavedMarkers.forEach(m => { try { if (m && typeof m.remove === 'function') m.remove(); } catch(_) {} });
+      const savedRes = await apiCall("/api/get-restaurants");
+      const saved = savedRes.success ? savedRes.data : arr;
+
+      restaurantSavedMarkers.forEach(m => {
+        try {
+          if (m && typeof m.remove === "function") m.remove();
+        } catch (_) {}
+      });
       restaurantSavedMarkers = [];
-      // Ensure map exists
-      try { initAdminMap(); } catch(_) {}
-      if (typeof map !== 'undefined' && map && Array.isArray(saved)) {
+
+      try {
+        initAdminMap();
+      } catch (_) {}
+
+      if (typeof map !== "undefined" && map && Array.isArray(saved)) {
         saved.forEach(r => {
-          const lat = r.latitude ?? r.lat ?? r.lat;
-          const lng = r.longitude ?? r.lng ?? r.lng;
+          const lat = r.latitude ?? r.lat;
+          const lng = r.longitude ?? r.lng;
+
           if (lat != null && lng != null && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
             try {
-              const popupHtmlSaved = `<b>${r.name} (#${r.id})</b>`;
-              const mk = new mappls.Marker({ map, position: [Number(lat), Number(lng)], popupHtml: popupHtmlSaved });
-              // clicking a saved marker will populate the ID input and focus
-              try {
-                if (mk && typeof mk.on === 'function') {
-                  mk.on('click', function(){
-                    const input = document.getElementById('restaurantIdInput');
-                    if (input) { input.value = r.id; input.focus(); }
-                    try { clearRestaurantMarker(); placeRestaurantMarker(r.id, Number(lat), Number(lng), false); } catch(_){ }
-                  });
-                  // hover to show popup
-                  mk.on('mouseover', function(){ try { mk.setPopupHtml && mk.setPopupHtml(popupHtmlSaved); mk.openPopup && mk.openPopup(); } catch(e){} });
-                  mk.on('mouseout', function(){ try { mk.closePopup && mk.closePopup(); } catch(e){} });
-                }
-              } catch(e){ /* non-fatal */ }
+              const popupHtml = `<b>${r.name} (#${r.id})</b>`;
+              const mk = new mappls.Marker({
+                map,
+                position: [Number(lat), Number(lng)],
+                popupHtml
+              });
+
+              if (mk && typeof mk.on === "function") {
+                mk.on("click", function() {
+                  const inp = document.getElementById("restaurantIdInput");
+                  if (inp) {
+                    inp.value = r.id;
+                    inp.focus();
+                  }
+                  try {
+                    clearRestaurantMarker();
+                    placeRestaurantMarker(r.id, Number(lat), Number(lng), false);
+                  } catch (_) {}
+                });
+
+                mk.on("mouseover", function() {
+                  try {
+                    if (mk.setPopupHtml) mk.setPopupHtml(popupHtml);
+                    if (mk.openPopup) mk.openPopup();
+                  } catch (_) {}
+                });
+
+                mk.on("mouseout", function() {
+                  try {
+                    if (mk.closePopup) mk.closePopup();
+                  } catch (_) {}
+                });
+              }
+
               restaurantSavedMarkers.push(mk);
-            } catch (e) { console.error('Failed to add saved restaurant marker', e); }
+            } catch (e) {
+              console.error("Failed to add restaurant marker:", e);
+            }
           }
         });
       }
     } catch (err) {
-      console.warn('Could not load saved restaurant markers:', err);
+      console.warn("Could not load saved restaurant markers:", err);
     }
-  } catch(_){ }
+
+    console.log(`✅ Map loaded with ${restaurantSavedMarkers.length} restaurant markers`);
+  } catch (err) {
+    console.error("Load restaurants for map error:", err);
+  }
 }
-async function loadAllUsersLight(){
+
+async function loadAllUsersLight() {
   try {
-    const res = await fetch(`${BASE}/api/admin/users?page=1&limit=100000`);
-    if(!res.ok) return; const arr = await res.json();
+    console.log("👤 Loading users for map...");
+    const res = await apiCall("/api/admin/users");
+    if (!res.success) {
+      console.warn("Users load failed");
+      return;
+    }
+
+    const arr = res.data || [];
     usersById = new Map(arr.map(u => [Number(u.id), u]));
-  } catch(_){}
+    console.log(`✅ Loaded ${arr.length} users`);
+  } catch (err) {
+    console.error("Load users error:", err);
+  }
 }
-// Open fullscreen showing the first active order with agent assignment (fallback to any)
-document.getElementById('btnFullMapAdmin').addEventListener('click', async ()=>{
-  try{
-    const res = await fetch(`${BASE}/api/admin/orders`);
-    const orders = res.ok ? await res.json() : [];
-    const withAgent = orders.filter(o => o.agent_id);
-    const order = (withAgent[0] || orders[0]) || null;
-    openAdminFullMap(order);
-  }catch(e){ openAdminFullMap(null); }
+
+// Open fullscreen map
+document.addEventListener("DOMContentLoaded", () => {
+  const btnFullMapAdmin = document.getElementById("btnFullMapAdmin");
+  if (btnFullMapAdmin) {
+    btnFullMapAdmin.addEventListener("click", async () => {
+      try {
+        const res = await apiCall("/api/admin/orders");
+        const orders = res.success ? res.data : [];
+        const withAgent = orders.filter(o => o.agent_id);
+        const order = withAgent[0] || orders[0] || null;
+        openAdminFullMap(order);
+      } catch (e) {
+        openAdminFullMap(null);
+      }
+    });
+  }
 });
 
-function openAdminFullMap(order){
-  const modal = document.getElementById('adminFullMapModal');
-  const closeBtn = document.getElementById('adminFullMapClose');
-  modal.classList.remove('hidden'); modal.classList.add('flex');
-  if(!adminFullMap){
-    if (typeof mappls === 'undefined') {
-      console.error('Mappls SDK not loaded for admin full map.');
+function openAdminFullMap(order) {
+  const modal = document.getElementById("adminFullMapModal");
+  const closeBtn = document.getElementById("adminFullMapClose");
+
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+
+  if (!adminFullMap) {
+    if (typeof mappls === "undefined") {
+      console.error("Mappls SDK not loaded");
     } else {
-      adminFullMap = new mappls.Map('adminFullMap', { center: [17.385, 78.486], zoom: 12 });
+      adminFullMap = new mappls.Map("adminFullMap", {
+        center: [17.385, 78.486],
+        zoom: 12
+      });
     }
   }
+
   drawAdminRoute(order);
-  closeBtn.onclick = ()=>{ modal.classList.add('hidden'); modal.classList.remove('flex'); };
-  modal.addEventListener('click', (e)=>{ if(e.target === modal) closeBtn.click(); });
+
+  closeBtn.onclick = () => {
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+  };
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeBtn.click();
+  });
 }
 
-function clearAdminRoute(){
+function clearAdminRoute() {
   adminFullMapLayers.forEach(l => {
-    try{
-      if (typeof l.setMap === 'function') l.setMap(null);
-      else if (typeof l.remove === 'function') l.remove();
-    }catch(_){}
+    try {
+      if (typeof l.setMap === "function") l.setMap(null);
+      else if (typeof l.remove === "function") l.remove();
+    } catch (_) {}
   });
   adminFullMapLayers = [];
 }
 
-async function getMapplsToken(){
-  try{
-    const res = await fetch(`${BASE}/api/mappls/token`);
-    if(!res.ok) throw new Error('token request failed');
-    const data = await res.json();
-    return data.access_token || data.token || null;
-  } catch(e){ console.error('Failed to get Mappls token:', e.message); return null; }
+async function getMapplsToken() {
+  try {
+    const res = await apiCall("/api/mappls/token");
+    if (!res.success) throw new Error("Token request failed");
+    return res.data?.access_token || res.data?.token || null;
+  } catch (e) {
+    console.warn("Failed to get Mappls token:", e.message);
+    return null;
+  }
 }
 
-async function drawAdminRoute(order){
+async function drawAdminRoute(order) {
   clearAdminRoute();
-  const infoOrder = document.getElementById('adminInfoOrder');
-  const infoRest = document.getElementById('adminInfoRestaurant');
-  const infoPhone = document.getElementById('adminInfoPhone');
-  if(!order){
-    infoOrder.textContent = '—'; infoRest.textContent = '—'; infoPhone.textContent = '—';
+
+  const infoOrder = document.getElementById("adminInfoOrder");
+  const infoRest = document.getElementById("adminInfoRestaurant");
+  const infoPhone = document.getElementById("adminInfoPhone");
+
+  if (!order) {
+    if (infoOrder) infoOrder.textContent = "—";
+    if (infoRest) infoRest.textContent = "—";
+    if (infoPhone) infoPhone.textContent = "—";
     return;
   }
-  infoOrder.textContent = `#${order.id}`;
+
+  if (infoOrder) infoOrder.textContent = `#${order.id}`;
+
   const rest = restaurantsById.get(Number(order.restaurant_id));
-  infoRest.textContent = rest ? rest.name : String(order.restaurant_id || 'Unknown');
+  if (infoRest) infoRest.textContent = rest ? rest.name : String(order.restaurant_id || "Unknown");
+
   const user = usersById.get(Number(order.user_id));
-  infoPhone.textContent = user?.phone || '—';
+  if (infoPhone) infoPhone.textContent = user?.phone || "—";
 
   // Coordinates
-  const rlat = Number(rest?.lat); const rlng = Number(rest?.lng);
-  const ulat = Number(order.delivery_lat); const ulng = Number(order.delivery_lng);
-  // Agent coords: from current delivery markers if exists, else skip
+  const rlat = Number(rest?.lat || rest?.latitude);
+  const rlng = Number(rest?.lng || rest?.longitude);
+  const ulat = Number(order.delivery_lat);
+  const ulng = Number(order.delivery_lng);
+
   let alat, alng;
-  if(order.agent_id && deliveryMarkers[order.agent_id]){
+  if (order.agent_id && deliveryMarkers[order.agent_id]) {
     const mk = deliveryMarkers[order.agent_id];
-    try{
-      const p = (typeof mk.getPosition === 'function') ? mk.getPosition() : (typeof mk.getLatLng === 'function' ? mk.getLatLng() : null);
-      if (Array.isArray(p)) { alng = p[0]; alat = p[1]; }
-      else if (p && typeof p.lat !== 'undefined') { alat = p.lat; alng = p.lng; }
-    }catch(_){}
+    try {
+      const p =
+        typeof mk.getPosition === "function"
+          ? mk.getPosition()
+          : typeof mk.getLatLng === "function"
+          ? mk.getLatLng()
+          : null;
+
+      if (Array.isArray(p)) {
+        alat = p[0];
+        alng = p[1];
+      } else if (p && typeof p.lat !== "undefined") {
+        alat = p.lat;
+        alng = p.lng;
+      }
+    } catch (_) {}
   }
+
   const points = [];
   const markers = [];
-  function addMarker(lat,lng,label){ if(Number.isFinite(lat)&&Number.isFinite(lng)){
-    try{
-      const m = new mappls.Marker({ map: adminFullMap, position: [lat,lng], popupHtml: label });
-      adminFullMapLayers.push(m); markers.push(m); points.push([lat,lng]);
-    }catch(e){ console.error('Add admin marker failed', e); }
-  } }
-  if(Number.isFinite(alat)&&Number.isFinite(alng)) addMarker(alat,alng,`Agent #${order.agent_id}`);
-  if(Number.isFinite(rlat)&&Number.isFinite(rlng)) addMarker(rlat,rlng,`Restaurant ${rest?.name||''}`);
-  if(Number.isFinite(ulat)&&Number.isFinite(ulng)) addMarker(ulat,ulng,`User ${user?.phone||''}`);
 
-  // Prefer route via Mappls Directions API, fallback to straight lines
-  const aPt = (Number.isFinite(alat)&&Number.isFinite(alng)) ? [alat,alng] : null;
-  const rPt = (Number.isFinite(rlat)&&Number.isFinite(rlng)) ? [rlat,rlng] : null;
-  const uPt = (Number.isFinite(ulat)&&Number.isFinite(ulng)) ? [ulat,ulng] : null;
+  function addMarker(lat, lng, label) {
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      try {
+        const m = new mappls.Marker({
+          map: adminFullMap,
+          position: [lat, lng],
+          popupHtml: label
+        });
+        adminFullMapLayers.push(m);
+        markers.push(m);
+        points.push([lat, lng]);
+      } catch (e) {
+        console.error("Add marker failed:", e);
+      }
+    }
+  }
 
-  let routedDrawn = false;
-  try{
+  if (Number.isFinite(alat) && Number.isFinite(alng))
+    addMarker(alat, alng, `Agent #${order.agent_id}`);
+  if (Number.isFinite(rlat) && Number.isFinite(rlng))
+    addMarker(rlat, rlng, `Restaurant ${rest?.name || ""}`);
+  if (Number.isFinite(ulat) && Number.isFinite(ulng))
+    addMarker(ulat, ulng, `User ${user?.phone || ""}`);
+
+  // Draw route or straight lines
+  const aPt = Number.isFinite(alat) && Number.isFinite(alng) ? [alat, alng] : null;
+  const rPt = Number.isFinite(rlat) && Number.isFinite(rlng) ? [rlat, rlng] : null;
+  const uPt = Number.isFinite(ulat) && Number.isFinite(ulng) ? [ulat, ulng] : null;
+
+  let routeDrawn = false;
+
+  try {
     const token = await getMapplsToken();
     const seq = [aPt, rPt, uPt].filter(Boolean);
-    if (seq.length >= 2){
-      const parts = seq.map(p => `${p[1]},${p[0]}`).join(';');
-      const url = `https://apis.mappls.com/advancedmaps/v1/route_adv/driving/${parts}?geometries=geojson${token?`&access_token=${encodeURIComponent(token)}`:''}`;
+
+    if (seq.length >= 2) {
+      const parts = seq.map(p => `${p[1]},${p[0]}`).join(";");
+      const url = `https://apis.mappls.com/advancedmaps/v1/route_adv/driving/${parts}?geometries=geojson${token ? `&access_token=${encodeURIComponent(token)}` : ""}`;
+
       const res = await fetch(url);
-      if (res.ok){
+      if (res.ok) {
         const data = await res.json();
-        const coords = data?.routes?.[0]?.geometry?.coordinates?.map(c=>[c[1],c[0]]) || null;
-        if (coords){
-          const pl = new mappls.Polyline({ map: adminFullMap, path: coords, strokeColor:'#16a34a', strokeWeight:6, strokeOpacity:1 });
+        const coords = data?.routes?.[0]?.geometry?.coordinates?.map(c => [c[1], c[0]]) || null;
+
+        if (coords) {
+          const pl = new mappls.Polyline({
+            map: adminFullMap,
+            path: coords,
+            strokeColor: "#16a34a",
+            strokeWeight: 6,
+            strokeOpacity: 1
+          });
+
           adminFullMapLayers.push(pl);
-          routedDrawn = true;
-          const lats = coords.map(p=>p[0]); const lngs = coords.map(p=>p[1]);
-          const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-          const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-          try{ adminFullMap.fitBounds([[minLat,minLng],[maxLat,maxLng]]); }catch(_){}
+          routeDrawn = true;
+
+          const lats = coords.map(p => p[0]);
+          const lngs = coords.map(p => p[1]);
+          const minLat = Math.min(...lats);
+          const maxLat = Math.max(...lats);
+          const minLng = Math.min(...lngs);
+          const maxLng = Math.max(...lngs);
+
+          try {
+            adminFullMap.fitBounds([[minLat, minLng], [maxLat, maxLng]]);
+          } catch (_) {}
         }
       }
     }
-  } catch(_){}
-  if (!routedDrawn){
+  } catch (_) {}
+
+  if (!routeDrawn) {
     const straight = [aPt, rPt, uPt].filter(Boolean);
-    for (let i=0;i<straight.length-1;i++){
-      try{
-        const seg = new mappls.Polyline({ map: adminFullMap, path: [straight[i], straight[i+1]], strokeColor:'#10b981', strokeOpacity:0.9, strokeWeight:5 });
+
+    for (let i = 0; i < straight.length - 1; i++) {
+      try {
+        const seg = new mappls.Polyline({
+          map: adminFullMap,
+          path: [straight[i], straight[i + 1]],
+          strokeColor: "#10b981",
+          strokeOpacity: 0.9,
+          strokeWeight: 5
+        });
+
         adminFullMapLayers.push(seg);
-      }catch(e){ console.error('Add straight segment failed', e); }
+      } catch (e) {
+        console.error("Add segment failed:", e);
+      }
     }
-    if(points.length){
-      const lats = points.map(p=>p[0]); const lngs = points.map(p=>p[1]);
-      const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-      const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-      try{ adminFullMap.fitBounds([[minLat,minLng],[maxLat,maxLng]]); }catch(_){}
+
+    if (points.length) {
+      const lats = points.map(p => p[0]);
+      const lngs = points.map(p => p[1]);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+
+      try {
+        adminFullMap.fitBounds([[minLat, minLng], [maxLat, maxLng]]);
+      } catch (_) {}
     }
   }
-}
-document.getElementById('bannerForm').addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const file = document.getElementById('bannerFile').files[0];
-  if(!file){ showToast('Select an image', false); return; }
-  const fd = new FormData();
-  fd.append('banner', file);
-  try {
-    const res = await fetch(`${BASE}/api/admin/banners`, { method:'POST', body: fd });
-    const j = await res.json();
-    if(res.ok){ showToast('✅ Banner uploaded'); document.getElementById('bannerForm').reset(); loadBanners(); }
-    else { showToast('❌ ' + (j.error || 'Upload failed'), false); }
-  } catch(err){ showToast('❌ Network error', false); }
-});
-
-async function removeBanner(id){
-  if(!confirm('Remove this banner?')) return;
-  try {
-    const res = await fetch(`${BASE}/api/admin/banners/${id}`, { method:'DELETE' });
-    const j = await res.json();
-    if(res.ok){ showToast('✅ Banner removed'); loadBanners(); }
-    else { showToast('❌ ' + (j.error || 'Delete failed'), false); }
-  } catch(e){ showToast('❌ Network error', false); }
 }
 </script>
 </body>
