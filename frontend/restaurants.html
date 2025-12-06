@@ -41,38 +41,52 @@
 
   <footer class="text-center text-gray-500 py-12">&copy; 2025 Tindo</footer>
 
-<script>
+<script type="module">
+import { API_BASE_URL } from "./js/config.js";
+
 async function loadAllRestaurants(){
   try{
-    const res = await fetch(`${API_BASE_URL}/api/restaurants`);
+    const res = await fetch(`${API_BASE_URL}/restaurants`);
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
     const data = await res.json();
+    console.log("Restaurants loaded:", data);
     renderAll(data || []);
-  }catch(e){
-    console.error('Failed to load restaurants', e);
-    alert("Server offline. Try later");
-    document.getElementById('all-restaurants').innerHTML = '<p class="text-red-500">Failed to load restaurants</p>';
+  } catch(e){
+    console.error('Failed to load restaurants:', e);
+    const container = document.getElementById('all-restaurants');
+    if (container) {
+      container.innerHTML = '<p class="text-gray-500">No restaurants available</p>';
+    }
   }
 }
 
 function renderAll(list){
   const container = document.getElementById('all-restaurants');
   if(!container) return;
-  if(!list.length){ container.innerHTML = '<p class="text-gray-500">No restaurants found</p>'; return; }
-  container.innerHTML = list.map(r => `
+  if(!list.length){ 
+    container.innerHTML = '<p class="text-gray-500">No restaurants available</p>'; 
+    return; 
+  }
+  container.innerHTML = list.map(r => {
+    const imageUrl = r.image_url ? `${API_BASE_URL.replace('/api', '')}/uploads/${r.image_url}` : 'https://via.placeholder.com/200';
+    return `
     <div class="card rounded-2xl overflow-hidden cursor-pointer transition transform group" onclick="window.location.href='restaurant.html?id=${r.id}'">
       <div class="h-48 relative">
-        <img src="${BASE}/uploads/${r.image_url || 'default.jpg'}" class="h-full w-full object-cover" alt="${r.name}">
+        <img src="${imageUrl}" class="h-full w-full object-cover" alt="${r.name || 'Restaurant'}" onerror="this.src='https://via.placeholder.com/200'">
       </div>
       <div class="p-6">
-        <h3 class="text-xl font-bold text-gray-800 mb-2">${r.name}</h3>
-        <p class="text-gray-600 mb-3">${r.cuisine || 'Multi Cuisine'}</p>
+        <h3 class="text-xl font-bold text-gray-800 mb-2">${r.name || 'Restaurant'}</h3>
+        <p class="text-gray-600 mb-1">${r.cuisine || 'Multi Cuisine'}</p>
+        <p class="text-gray-500 text-sm mb-3">${r.address || 'Location'}</p>
         <div class="flex items-center justify-between">
-          <span class="text-green-600 font-semibold">⭐ ${(r.avg_rating || r.rating || '4.3')} · ${r.eta || '30'} mins</span>
+          <span class="text-green-600 font-semibold">⭐ ${r.rating || '4.0'} · ${r.eta || '30'} mins</span>
           <a href="restaurant.html?id=${r.id}" class="btn-see">View</a>
         </div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 // Kick off

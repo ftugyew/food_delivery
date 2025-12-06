@@ -400,7 +400,7 @@
 </footer>
 <!-- Popup Banner Modal removed — using inline hero banner instead -->
 <script>
-import { API_BASE_URL } from "./config.js";
+import { API_BASE_URL } from "./js/config.js";
 
 
 function openCategoryPage(category) {
@@ -414,7 +414,7 @@ let featuredRestaurants = [];
 
 async function loadRestaurants() {
   try {
-    const res = await fetch(`${BASE}/api/restaurants`);
+    const res = await fetch(`${BASE}/restaurants`);
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
@@ -433,7 +433,7 @@ async function loadRestaurants() {
 
 async function loadMenuItems() {
   try {
-    const res = await fetch(`${BASE}/api/restaurants/1/menu`);
+    const res = await fetch(`${BASE}/restaurants/1/menu`);
     const data = await res.json();
     allMenuItems = data;
   } catch (err) {
@@ -443,8 +443,8 @@ async function loadMenuItems() {
 
 async function loadFeaturedRestaurants() {
   try {
-    console.log("Fetching featured restaurants from:", `${BASE}/api/featured-restaurants`);
-    const res = await fetch(`${BASE}/api/featured-restaurants`);
+    console.log("Fetching featured restaurants from:", `${BASE}/featured-restaurants`);
+    const res = await fetch(`${BASE}/featured-restaurants`);
     console.log("Response status:", res.status);
 
     if (!res.ok) {
@@ -466,7 +466,7 @@ async function loadFeaturedRestaurants() {
 
 async function loadTopRestaurants() {
   try {
-    const res = await fetch(`${BASE}/api/restaurants`);
+    const res = await fetch(`${BASE}/restaurants`);
     const data = await res.json();
     topRestaurants = data;
     displayTopRestaurants(data);
@@ -827,7 +827,7 @@ document.getElementById("dishesModal").addEventListener("click", (e) => {
 // Function to filter and display items based on category (renamed to avoid clashing with the simple navigator)
 async function fetchCategoryItems(category) {
   try {
-    const res = await fetch(`${BASE}/api/menu?category=${encodeURIComponent(category)}`);
+    const res = await fetch(`${BASE}/menu?category=${encodeURIComponent(category)}`);
     const items = await res.json();
 
     // Update the restaurants section title
@@ -898,7 +898,7 @@ themeToggle.addEventListener('click', () => {
 // ===== Popup Banner logic =====
 async function initPopupBanner(){
   try {
-    const res = await fetch(`${BASE}/api/banners`);
+    const res = await fetch(`${BASE}/banners`);
     if(!res.ok) return; // silent
     const banner = await res.json();
     if(!banner || !banner.image_url) return;
