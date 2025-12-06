@@ -350,4 +350,58 @@
       toggleRoleFields();
     }
   });
+
+
+// ===== Register =====
+router.post("/register", async (req, res) => {
+  try {
+    const { name, email, password, phone, role } = req.body;
+
+    if (!name || !email || !password || !phone || !role) {
+      return res.status(400).json({ error: "All fields required" });
+    }
+
+    const hashedPass = await bcrypt.hash(password, 10);
+    let restaurantId = null;
+
+    // Restaurant registration
+    if (role === "restaurant" || role === "restaurant_owner") {
+      const { restaurant_name, description, cuisine, eta } = req.body;
+
+      const [restResult] = await db.execute(
+        "INSERT INTO restaurants (name, email, phone, description, cuisine, eta, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [restaurant_name, email, phone, description || '', cuisine, eta || 30, "pending"]
+      );
+
+      restaurantId = restResult.insertId;
+    }
+
+    // Delivery Agent registration
+    if (role === "delivery" || role === "delivery_agent") {
+      const { aadhar, vehicle_type } = req.body;
+
+      await db.execute(
+        "INSERT INTO agents (name, email, phone, aadhar, vehicle_type, status) VALUES (?, ?, ?, ?, ?, 'Active')",
+        [name, email, phone, aadhar, vehicle_type]
+      );
+    }
+
+    // Insert into users table (always)
+    const [userResult] = await db.execute(
+      "INSERT INTO users (name, email, password_hash, phone, role, restaurant_id) VALUES (?, ?, ?, ?, ?, ?)",
+      [name, email, hashedPass, phone, role, restaurantId]
+    );
+
+    return res.json({
+      success: true,
+      message: "Registration completed",
+      user_id: userResult.insertId,
+      restaurant_id: restaurantId
+    });
+
+  } catch (err) {
+    console.error("Register Error:", err);
+    return res.status(500).json({ error: "Registration failed" });
+  }
+});
 </script>
