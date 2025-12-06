@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tindo — Order Tracking</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Leaflet Map & Socket.IO -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  
+  <link rel="stylesheet" href="css/animations.css">
+  
+  <style>
+    #map {
+      height: 500px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .status-pending { background-color: #FEE2E2; color: #991B1B; }
+    .status-confirmed { background-color: #FEF3C7; color: #92400E; }
+    .status-preparing { background-color: #DBEAFE; color: #0C2340; }
+    .status-ready { background-color: #C7D2FE; color: #1E1B4B; }
+    .status-picked { background-color: #ECFDF5; color: #065F46; }
+    .status-in-transit { background-color: #E0E7FF; color: #312E81; }
+    .status-completed { background-color: #D1FAE5; color: #065F46; }
+    
+    .timeline {
+      position: relative;
+      padding: 20px 0;
+    }
+    
+    .timeline-item {
+      display: flex;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    
+    .timeline-item.completed .timeline-marker {
+      background-color: #10b981;
+      border-color: #10b981;
+    }
+    
+    .timeline-marker {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background-color: #e5e7eb;
+      border: 3px solid #10b981;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      flex-shrink: 0;
+      margin-right: 20px;
+    }
+    
+    .timeline-content {
+      flex: 1;
+    }
+    
+    .timeline-content h4 {
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    
+    .timeline-content p {
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+  <!-- Header -->
+  <header class="bg-green-600 text-white p-4 shadow-md">
+    <div class="max-w-6xl mx-auto flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold">📦 Order Tracking</h1>
+        <p class="text-green-100 text-sm" id="order-number">Order #</p>
+      </div>
+      <a href="index.html" class="bg-white text-green-600 px-4 py-2 rounded-xl font-medium hover:bg-green-50 transition">
+        Back Home
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-6xl mx-auto mt-8 p-6">
+    <!-- Order Summary Card -->
+    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900" id="restaurant-name">Loading...</h2>
+          <p class="text-gray-600" id="order-status">Status: <span class="status-badge" id="status-badge">Pending</span></p>
+        </div>
+        <div class="text-right">
+          <p class="text-3xl font-bold text-green-600" id="total-amount">₹0</p>
+          <p class="text-gray-600 text-sm" id="estimated-time">Est. 30 mins</p>
+        </div>
+      </div>
+
+      <!-- Order Details -->
+      <div class="grid md:grid-cols-2 gap-6 border-t pt-4">
+        <!-- Left: Delivery Info -->
+        <div>
+          <h3 class="text-lg font-semibold mb-3 text-gray-900">📍 Delivery Address</h3>
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <p class="font-medium" id="delivery-name">-</p>
+            <p class="text-gray-600 text-sm" id="delivery-phone">-</p>
+            <p class="text-gray-600 text-sm" id="delivery-address">-</p>
+          </div>
+        </div>
+
+        <!-- Right: Agent Info -->
+        <div>
+          <h3 class="text-lg font-semibold mb-3 text-gray-900">🚗 Delivery Agent</h3>
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-10 h-10 bg-green-200 rounded-full flex items-center justify-center text-xl">🚴</div>
+              <div>
+                <p class="font-medium" id="agent-name">Unassigned</p>
+                <p class="text-gray-600 text-sm" id="agent-phone">-</p>
+              </div>
+            </div>
+            <div id="agent-status" class="text-sm text-gray-600">
+              <p>🟢 Active</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map Section -->
+    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+      <h3 class="text-lg font-semibold mb-4 text-gray-900">🗺️ Live Map</h3>
+      <div id="map"></div>
+      <p class="text-gray-600 text-sm mt-4">
+        🔴 Restaurant | 🟢 Delivery Agent | 🔵 You
+      </p>
+    </div>
+
+    <!-- Timeline Section -->
+    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+      <h3 class="text-lg font-semibold mb-4 text-gray-900">📋 Order Timeline</h3>
+      <div class="timeline">
+        <div class="timeline-item" id="timeline-pending">
+          <div class="timeline-marker">1</div>
+          <div class="timeline-content">
+            <h4>Order Confirmed</h4>
+            <p>Your order has been placed</p>
+          </div>
+        </div>
+        <div class="timeline-item" id="timeline-preparing">
+          <div class="timeline-marker">2</div>
+          <div class="timeline-content">
+            <h4>Preparing Food</h4>
+            <p>Restaurant is preparing your meal</p>
+          </div>
+        </div>
+        <div class="timeline-item" id="timeline-ready">
+          <div class="timeline-marker">3</div>
+          <div class="timeline-content">
+            <h4>Food Ready</h4>
+            <p>Your food is ready for pickup</p>
+          </div>
+        </div>
+        <div class="timeline-item" id="timeline-picked">
+          <div class="timeline-marker">4</div>
+          <div class="timeline-content">
+            <h4>Picked Up</h4>
+            <p>Delivery agent picked up your order</p>
+          </div>
+        </div>
+        <div class="timeline-item" id="timeline-transit">
+          <div class="timeline-marker">5</div>
+          <div class="timeline-content">
+            <h4>In Transit</h4>
+            <p>Your food is on the way</p>
+          </div>
+        </div>
+        <div class="timeline-item" id="timeline-completed">
+          <div class="timeline-marker">6</div>
+          <div class="timeline-content">
+            <h4>Delivered</h4>
+            <p>Order delivered successfully</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Order Items -->
+    <div class="bg-white rounded-2xl shadow-lg p-6">
+      <h3 class="text-lg font-semibold mb-4 text-gray-900">🍽️ Order Items</h3>
+      <div id="order-items" class="space-y-3">
+        <!-- Items will be populated here -->
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="text-center mt-16 py-6 bg-gray-100 text-gray-600 text-sm">
+    <p>Need help? Contact support: <strong>support@tindo.com</strong> | <strong>1800-TINDO</strong></p>
+    <p>© 2025 Tindo – Mana Tindi, Mana App</p>
+  </footer>
+
+  <script>
+    const BACKEND_URL = "https://food-delivery-backend-cw3m.onrender.com";
+    const API_BASE_URL = BACKEND_URL + "/api";
+    
+    // Get order ID from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderId = urlParams.get("orderId");
+    
+    if (!orderId) {
+      alert("Order ID not found. Redirecting to home...");
+      window.location.href = "index.html";
+    }
+
+    let map = null;
+    let restaurantMarker = null;
+    let agentMarker = null;
+    let customerMarker = null;
+    let currentOrder = null;
+
+    const socket = io(BACKEND_URL, {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5
+    });
+
+    // Initialize map
+    function initMap() {
+      map = L.map('map').setView([28.6139, 77.2090], 13); // Default to Delhi
+      
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(map);
+    }
+
+    // Fetch order details
+    async function fetchOrderDetails() {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch order");
+        }
+
+        const order = await response.json();
+        currentOrder = order;
+        
+        // Handle both array and object responses
+        const orderData = Array.isArray(order) ? order[0] : order;
+        
+        console.log("Order data:", orderData);
+        updateOrderUI(orderData);
+        updateMap(orderData);
+      } catch (error) {
+        console.error("Error fetching order:", error);
+        alert("Failed to load order details. Please try again.");
+      }
+    }
+
+    // Update UI with order details
+    function updateOrderUI(order) {
+      document.getElementById("order-number").textContent = `Order #${order.order_id || order.id}`;
+      document.getElementById("restaurant-name").textContent = order.restaurant_name || "Restaurant";
+      document.getElementById("status-badge").textContent = order.status || "Pending";
+      document.getElementById("status-badge").className = `status-badge status-${(order.status || "pending").toLowerCase()}`;
+      document.getElementById("total-amount").textContent = `₹${order.total || 0}`;
+      document.getElementById("estimated-time").textContent = `Est. ${order.estimated_delivery || 30} mins`;
+      
+      // Delivery address
+      document.getElementById("delivery-name").textContent = order.delivery_name || "Customer";
+      document.getElementById("delivery-phone").textContent = order.delivery_phone || "-";
+      document.getElementById("delivery-address").textContent = order.delivery_address || "Address not set";
+      
+      // Agent info
+      if (order.agent_id) {
+        document.getElementById("agent-name").textContent = order.agent_name || "Agent " + order.agent_id;
+        document.getElementById("agent-phone").textContent = order.agent_phone || "-";
+      }
+      
+      // Order items
+      const itemsContainer = document.getElementById("order-items");
+      if (order.items) {
+        const items = typeof order.items === "string" ? JSON.parse(order.items) : order.items;
+        itemsContainer.innerHTML = items.map(item => `
+          <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+            <span class="font-medium">${item.name || item.item_name} x ${item.quantity || 1}</span>
+            <span class="text-green-600 font-semibold">₹${(item.price * (item.quantity || 1)).toFixed(2)}</span>
+          </div>
+        `).join("");
+      }
+      
+      // Update timeline
+      updateTimeline(order.status);
+    }
+
+    // Update timeline based on status
+    function updateTimeline(status) {
+      const statusSteps = ["Pending", "Confirmed", "Preparing", "Ready", "Picked", "In-Transit", "Completed"];
+      const timelineIds = ["pending", "confirmed", "preparing", "ready", "picked", "transit", "completed"];
+      
+      statusSteps.forEach((step, index) => {
+        const element = document.getElementById(`timeline-${timelineIds[index]}`);
+        if (element) {
+          if (statusSteps.indexOf(status || "Pending") >= index) {
+            element.classList.add("completed");
+          } else {
+            element.classList.remove("completed");
+          }
+        }
+      });
+    }
+
+    // Update map with locations
+    function updateMap(order) {
+      initMap();
+      
+      // Restaurant location
+      if (order.restaurant_lat && order.restaurant_lng) {
+        const restaurantCoords = [order.restaurant_lat, order.restaurant_lng];
+        if (restaurantMarker) map.removeLayer(restaurantMarker);
+        restaurantMarker = L.marker(restaurantCoords, {
+          title: order.restaurant_name || "Restaurant",
+          icon: L.icon({
+            iconUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23dc2626'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3C/svg%3E",
+            iconSize: [32, 32]
+          })
+        }).bindPopup(`<b>${order.restaurant_name || "Restaurant"}</b>`).addTo(map);
+      }
+      
+      // Agent location (delivery person)
+      if (order.delivery_lat && order.delivery_lng) {
+        const agentCoords = [order.delivery_lat, order.delivery_lng];
+        if (agentMarker) map.removeLayer(agentMarker);
+        agentMarker = L.marker(agentCoords, {
+          title: "Delivery Agent",
+          icon: L.icon({
+            iconUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2316a34a'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3C/svg%3E",
+            iconSize: [32, 32]
+          })
+        }).bindPopup(`<b>Delivery Agent</b>`).addTo(map);
+      }
+      
+      // Customer location
+      if (order.customer_lat && order.customer_lng) {
+        const customerCoords = [order.customer_lat, order.customer_lng];
+        if (customerMarker) map.removeLayer(customerMarker);
+        customerMarker = L.marker(customerCoords, {
+          title: "You",
+          icon: L.icon({
+            iconUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3C/svg%3E",
+            iconSize: [32, 32]
+          })
+        }).bindPopup(`<b>Your Location</b>`).addTo(map);
+      }
+      
+      // Fit map to show all markers
+      const group = new L.featureGroup([restaurantMarker, agentMarker, customerMarker].filter(m => m));
+      if (group.getLayers().length > 0) {
+        map.fitBounds(group.getBounds().pad(0.1));
+      }
+    }
+
+    // Socket.IO listeners
+    socket.on("connect", () => {
+      console.log("✅ Connected to real-time updates");
+    });
+
+    socket.on(`trackOrder_${orderId}`, (location) => {
+      console.log("📍 Location update:", location);
+      if (location && location.lat && location.lng) {
+        if (agentMarker) map.removeLayer(agentMarker);
+        agentMarker = L.marker([location.lat, location.lng], {
+          title: "Delivery Agent",
+          icon: L.icon({
+            iconUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2316a34a'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3C/svg%3E",
+            iconSize: [32, 32]
+          })
+        }).bindPopup(`<b>Delivery Agent</b>`).addTo(map);
+      }
+    });
+
+    socket.on("orderUpdate", (data) => {
+      console.log("🔄 Order update:", data);
+      if (data.order_id == orderId || data.id == orderId) {
+        fetchOrderDetails(); // Refresh order details
+      }
+    });
+
+    socket.on("disconnect", () => {
+      console.log("❌ Disconnected from real-time updates");
+    });
+
+    // Initialize
+    window.addEventListener("load", () => {
+      fetchOrderDetails();
+      
+      // Poll for updates every 10 seconds as fallback
+      setInterval(fetchOrderDetails, 10000);
+    });
+  </script>
+
+</body>
+</html>
