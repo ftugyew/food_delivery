@@ -189,30 +189,84 @@
     e.preventDefault();
     const email = document.getElementById("email_input").value.trim();
     const password = document.getElementById("password_input").value.trim();
+    
+    if (!email || !password) {
+      alert("Please enter email and password");
+      return;
+    }
+
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/login`, {
-        method:"POST", headers:{ "Content-Type":"application/json" },
+      const res = await fetch(`https://food-delivery-backend-cw3m.onrender.com/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
       });
+
       const json = await res.json();
-      if(res.ok && json && json.success && json.data){
-        const { token, user } = json.data;
-        spoon.classList.add("happy");
-        setTimeout(()=>spoon.classList.remove("happy"),800);
-        localStorage.setItem("token", token);
-        localStorage.setItem("user", JSON.stringify(user));
-        if (user.role === "admin") window.location.href = "admin-dashboard.html";
-        else window.location.href = "index.html";
-      } else {
+
+      // Handle 401 (Invalid credentials)
+      if (res.status === 401) {
         spoon.classList.add("sad");
-        setTimeout(()=>spoon.classList.remove("sad"),800);
-        alert(json.message || json.error || "Login failed");
+        setTimeout(() => spoon.classList.remove("sad"), 800);
+        alert("Invalid email or password");
+        return;
       }
-    } catch (err){
-      alert("Server offline. Try later");
+
+      // Handle other errors
+      if (!res.ok) {
+        spoon.classList.add("sad");
+        setTimeout(() => spoon.classList.remove("sad"), 800);
+        alert(json.error || "Login failed. Please try again.");
+        return;
+      }
+
+      // Handle pending restaurant status
+      if (json.status === "pending") {
+        spoon.classList.add("sad");
+        setTimeout(() => spoon.classList.remove("sad"), 800);
+        alert("Your restaurant is waiting for admin approval");
+        return;
+      }
+
+      // Handle rejected restaurant status
+      if (json.status === "rejected") {
+        spoon.classList.add("sad");
+        setTimeout(() => spoon.classList.remove("sad"), 800);
+        alert("Your restaurant application was rejected");
+        return;
+      }
+
+      // Success: store token and user data
+      if (json.token) {
+        localStorage.setItem("token", json.token);
+      }
+      if (json.user) {
+        localStorage.setItem("user", JSON.stringify(json.user));
+      }
+
+      // Redirect based on role or redirectTo
+      spoon.classList.add("happy");
+      setTimeout(() => spoon.classList.remove("happy"), 800);
+
+      if (json.redirectTo) {
+        window.location.href = json.redirectTo;
+      } else {
+        // Fallback based on role
+        if (json.role === "admin") {
+          window.location.href = "admin-dashboard.html";
+        } else if (json.role === "restaurant") {
+          window.location.href = "restaurant-dashboard.html";
+        } else if (json.role === "delivery") {
+          window.location.href = "delivery-dashboard.html";
+        } else {
+          window.location.href = "index.html";
+        }
+      }
+    } catch (err) {
       spoon.classList.add("sad");
-      setTimeout(()=>spoon.classList.remove("sad"),800);
-      console.error(err);
+      setTimeout(() => spoon.classList.remove("sad"), 800);
+      alert("Server offline. Please try again later.");
+      console.error("Login error:", err);
     }
   });
 
@@ -221,40 +275,70 @@
     const phone = document.getElementById("phone_input").value.trim().replace(/\D/g,'');
     if(!phone || phone.length < 10) return alert("Enter valid phone");
     try {
-      const res = await fetch(`${BASE}/api/otp/send`, {
-        method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ phone })
+      const res = await fetch(`https://food-delivery-backend-cw3m.onrender.com/api/otp/send`, {
+        method:"POST", 
+        headers:{ "Content-Type":"application/json" }, 
+        body: JSON.stringify({ phone })
       });
       const json = await res.json();
       if(res.ok){
         alert("OTP sent (check your phone). If in dev, check server console.");
         document.getElementById("otp_verification").classList.remove("hidden");
       } else alert(json.error || "Failed to send OTP");
-    } catch(e){ alert("Network error"); console.error(e); }
+    } catch(e){ 
+      alert("Network error"); 
+      console.error(e); 
+    }
   });
 
   document.getElementById("verifyOtpBtn").addEventListener("click", async () => {
     const phone = document.getElementById("phone_input").value.trim().replace(/\D/g,'');
     const otp = document.getElementById("otp_input").value.trim();
     try{
-      const res = await fetch(`${BASE}/api/otp/verify`, {
-        method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ phone, otp })
+      const res = await fetch(`https://food-delivery-backend-cw3m.onrender.com/api/otp/verify`, {
+        method:"POST", 
+        headers:{ "Content-Type":"application/json" }, 
+        body: JSON.stringify({ phone, otp })
       });
       const json = await res.json();
       if(res.ok){
         spoon.classList.add("happy");
         setTimeout(()=>spoon.classList.remove("happy"),800);
-        localStorage.setItem("token", json.token);
-        localStorage.setItem("user", JSON.stringify(json.user));
-        if (json.user.role === "admin") window.location.href = "admin-dashboard.html";
-        else if (json.user.role === "restaurant") window.location.href = "restaurant-dashboard.html";
-        else if (json.user.role === "delivery" || json.user.role === "delivery_agent") window.location.href = "delivery-dashboard.html";
-        else window.location.href = "index.html";
+        if(json.token){
+          localStorage.setItem("token", json.token);
+        }
+        if(json.user){
+          localStorage.setItem("user", JSON.stringify(json.user));
+        }
+        
+        // Handle pending/rejected status
+        if (json.status === "pending") {
+          alert("Your restaurant is waiting for admin approval");
+          return;
+        }
+        if (json.status === "rejected") {
+          alert("Your restaurant application was rejected");
+          return;
+        }
+        
+        // Redirect based on role or redirectTo
+        if (json.redirectTo) {
+          window.location.href = json.redirectTo;
+        } else {
+          if (json.role === "admin") window.location.href = "admin-dashboard.html";
+          else if (json.role === "restaurant") window.location.href = "restaurant-dashboard.html";
+          else if (json.role === "delivery") window.location.href = "delivery-dashboard.html";
+          else window.location.href = "index.html";
+        }
       } else {
         spoon.classList.add("sad");
         setTimeout(()=>spoon.classList.remove("sad"),800);
-        alert(json.error || "OTP verify failed");
+        alert(json.error || "OTP verification failed");
       }
-    } catch(e){ alert("Network error"); console.error(e); }
+    } catch(e){ 
+      alert("Network error"); 
+      console.error(e); 
+    }
   });
 
   document.getElementById("googleBtn").addEventListener("click", ()=>socialFallback("google"));

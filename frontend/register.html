@@ -280,26 +280,61 @@
     }
 
     try {
-      // Unified JSON registration payload for new backend
-      const res = await fetch(`${API_BASE_URL}/auth/register`, {
+      // Validate basic fields
+      if (!name || !email || !password || !phone) {
+        alert("Please fill in all required fields");
+        return;
+      }
+
+      // Build the request payload
+      const payload = { 
+        name, 
+        email, 
+        password,
+        phone,
+        role
+      };
+
+      // Add role-specific data
+      if (role === "restaurant") {
+        payload.restaurant_name = restaurantData.restaurant_name;
+        payload.description = restaurantData.description;
+        payload.cuisine = restaurantData.cuisine;
+        payload.eta = restaurantData.eta;
+      } else if (role === "delivery_agent") {
+        payload.vehicle_type = deliveryData.vehicle_type;
+        payload.aadhar = deliveryData.aadhar;
+      }
+
+      // Use hardcoded backend URL
+      const res = await fetch(`https://food-delivery-backend-cw3m.onrender.com/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          name, 
-          email, 
-          password
-        })
+        body: JSON.stringify(payload)
       });
       const json = await res.json();
 
-      if(res.ok && json && json.success && json.data){
-        const { token, user } = json.data;
-        localStorage.setItem("token", token);
-        localStorage.setItem("user", JSON.stringify(user));
-        alert("✅ Registration successful! You are now logged in.");
-        window.location.href = "index.html";
+      if(res.ok && json.success){
+        // Show success message
+        alert("✅ Registration successful!");
+        
+        // Role-specific handling
+        if (role === "restaurant") {
+          alert("Your restaurant registration is pending admin approval");
+          window.location.href = "login.html";
+        } else if (role === "customer") {
+          window.location.href = "index.html";
+        } else if (role === "admin") {
+          window.location.href = "admin-dashboard.html";
+        } else {
+          // Default for other roles (delivery_agent, etc.)
+          window.location.href = "login.html";
+        }
+      } else if(res.status === 400) {
+        // Show backend error from response
+        alert("❌ " + (json.error || "Registration failed"));
       } else {
-        alert("❌ " + (json.message || json.error || "Registration failed"));
+        alert("❌ " + (json.error || json.message || "Registration failed"));
       }
     } catch(err){
       alert("Server offline. Try later");
