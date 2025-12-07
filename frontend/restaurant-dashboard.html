@@ -113,7 +113,7 @@
 
   <!-- Orders -->
   <div class="bg-white p-6 rounded-xl shadow mb-6">
-    <h3 class="text-xl font-bold mb-4">🛒 Live Orders</h3>
+    <h2 class="text-lg font-bold mb-2">Orders</h2>
     <div id="ordersList" class="space-y-3">
       <p class="text-gray-500">No orders yet...</p>
     </div>
@@ -198,7 +198,11 @@ async function loadOrders() {
 
 function renderOrders(orders) {
   const list = document.getElementById("ordersList");
-  if (!orders.length) {
+  if (!list) {
+    console.warn("ordersList element not found");
+    return;
+  }
+  if (!orders || !orders.length) {
     list.innerHTML = `<p class="text-gray-500">No orders yet...</p>`;
     return;
   }
@@ -252,8 +256,21 @@ async function loadMenu() {
     let res = await fetch(`${BASE}/api/menu/my`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    let data = await res.json();
+    let result = await res.json();
+    
+    // Handle new response format { success, data }
+    let data = result.data || result || [];
+    if (!Array.isArray(data)) {
+      console.error("Invalid menu data format:", result);
+      data = [];
+    }
+    
     const list = document.getElementById("menuList");
+    if (!list) {
+      console.warn("menuList element not found");
+      return;
+    }
+    
     if (!data.length) {
       list.innerHTML = `<p class="text-gray-500 col-span-2 text-center">No dishes added yet.</p>`;
       return;
@@ -300,12 +317,14 @@ document.getElementById("menuForm").addEventListener("submit", async (e) => {
     });
 
     const result = await res.json();
-    if (res.ok) {
+    if (res.ok && result.message) {
       showToast("✅ Dish added successfully!");
       e.target.reset();
       loadMenu();
     } else {
-      showToast(result.error || "Failed to add dish", false);
+      const errorMsg = result.error || result.details || "Failed to add dish";
+      console.error("Add dish error:", errorMsg, result);
+      showToast(`❌ ${errorMsg}`, false);
     }
   } catch (err) {
     console.error("Error adding dish:", err);
@@ -391,9 +410,12 @@ async function loadRestaurantInfo() {
     const res = await fetch(`${BASE}/api/restaurants/${restaurantId}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    const restaurant = await res.json();
+    const result = await res.json();
     
-    if (restaurant) {
+    // Handle new response format { success, data }
+    const restaurant = result.data || result;
+    
+    if (restaurant && restaurant.name) {
       document.getElementById("restaurantName").textContent = restaurant.name;
       document.getElementById("restaurantCuisine").textContent = restaurant.cuisine || 'Multi Cuisine';
       
@@ -453,35 +475,6 @@ new Chart(document.getElementById("revenueChart"), {
     }]
   }
 });
-
-// Fetch and display orders for the restaurant
-async function fetchRestaurantOrders() {
-  const restaurantId = 1; // Replace with dynamic restaurant ID
-
-  try {
-    const response = await fetch(`${BASE}/api/orders/restaurant/${restaurantId}`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch restaurant orders');
-    }
-
-    const orders = await response.json();
-    console.log('Orders:', orders);
-
-    // Display orders dynamically (example)
-    const ordersContainer = document.getElementById('ordersContainer');
-    ordersContainer.innerHTML = orders.map(order => `
-      <div class="order">
-        <p><b>Order ID:</b> ${order.id}</p>
-        <p><b>Status:</b> ${order.status}</p>
-        <p><b>Total:</b> ₹${order.total}</p>
-      </div>
-    `).join('');
-  } catch (error) {
-    console.error('Error fetching restaurant orders:', error);
-  }
-}
-
-document.addEventListener('DOMContentLoaded', fetchRestaurantOrders);
 </script>
 </body>
 </html>
