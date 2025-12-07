@@ -43,6 +43,7 @@
 
 <script type="module">
 import { API_BASE_URL } from "./js/config.js";
+const HOST_BASE = API_BASE_URL.replace(/\/api$/, "");
 
 async function loadAllRestaurants(){
   try{
@@ -70,7 +71,7 @@ function renderAll(list){
     return; 
   }
   container.innerHTML = list.map(r => {
-    const imageUrl = r.image_url ? `${API_BASE_URL.replace('/api', '')}/uploads/${r.image_url}` : 'https://via.placeholder.com/200';
+    const imageUrl = r.image_url ? `${HOST_BASE}/uploads/${r.image_url}` : 'https://via.placeholder.com/200';
     return `
     <div class="card rounded-2xl overflow-hidden cursor-pointer transition transform group" onclick="window.location.href='restaurant.html?id=${r.id}'">
       <div class="h-48 relative">

@@ -700,32 +700,32 @@ function renderFeaturedRestaurants(restaurants) {
     return;
   }
 
-  list.innerHTML = restaurants.map(fr => `
+  list.innerHTML = restaurants.map(fr => {
+    const img = fr.image_url ? `${BASE}/uploads/${fr.image_url}` : "https://via.placeholder.com/120?text=No+Image";
+    return `
     <div class="card bg-green-50 p-4 rounded-xl shadow flex justify-between items-center">
       <div class="flex items-center gap-4">
-        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-          <span class="text-green-600 font-bold text-lg">#${fr.position}</span>
-        </div>
+        <img src="${img}" class="w-16 h-16 rounded object-cover" onerror="this.src='https://via.placeholder.com/120?text=No+Image'" />
         <div>
           <h3 class="font-bold text-gray-800">${fr.name}</h3>
-          <p class="text-sm text-gray-600">ID: ${fr.restaurant_id} | ${fr.cuisine || "Multi-Cuisine"}</p>
-          <span class="inline-block px-2 py-1 text-xs rounded-full ${fr.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}">
-            ${fr.is_active ? "✓ Active" : "Inactive"}
+          <p class="text-sm text-gray-600">ID: ${fr.id || fr.restaurant_id} | ${fr.cuisine || "Multi-Cuisine"}</p>
+          <span class="inline-block px-2 py-1 text-xs rounded-full ${fr.status === 'approved' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}">
+            ${fr.status || "unknown"}
           </span>
         </div>
       </div>
       <div class="flex gap-2">
-        <button onclick="toggleFeaturedRestaurant(${fr.id}, ${fr.is_active})" 
-          class="px-4 py-2 rounded-lg text-sm font-medium text-white transition-all duration-200 ${fr.is_active ? "bg-yellow-500 hover:bg-yellow-600" : "bg-green-600 hover:bg-green-700"}">
-          ${fr.is_active ? "Deactivate" : "Activate"}
+        <button onclick="toggleFeaturedRestaurant(${fr.id || fr.restaurant_id}, ${fr.featured || 0})" 
+          class="px-4 py-2 rounded-lg text-sm font-medium text-white transition-all duration-200 ${fr.featured ? "bg-yellow-500 hover:bg-yellow-600" : "bg-green-600 hover:bg-green-700"}">
+          ${fr.featured ? "Deactivate" : "Activate"}
         </button>
-        <button onclick="removeFeaturedRestaurant(${fr.id})" 
+        <button onclick="removeFeaturedRestaurant(${fr.id || fr.restaurant_id})" 
           class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200">
           Remove
         </button>
       </div>
     </div>
-  `).join("");
+  `;}).join("");
 }
 
 async function addFeaturedRestaurant() {
@@ -815,32 +815,33 @@ function renderTopRestaurants(restaurants) {
     return;
   }
 
-  list.innerHTML = restaurants.map(tr => `
+  list.innerHTML = restaurants.map(tr => {
+    const img = tr.image_url ? `${BASE}/uploads/${tr.image_url}` : "https://via.placeholder.com/120?text=No+Image";
+    return `
     <div class="card bg-blue-50 p-4 rounded-xl shadow flex justify-between items-center">
       <div class="flex items-center gap-4">
-        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-          <span class="text-blue-600 font-bold text-lg">#${tr.position}</span>
-        </div>
+        <img src="${img}" class="w-16 h-16 rounded object-cover" onerror="this.src='https://via.placeholder.com/120?text=No+Image'" />
         <div>
           <h3 class="font-bold text-gray-800">${tr.name}</h3>
           <p class="text-sm text-gray-600">ID: ${tr.restaurant_id} | ${tr.cuisine || "Multi-Cuisine"}</p>
-          <span class="inline-block px-2 py-1 text-xs rounded-full ${tr.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}">
-            ${tr.is_active ? "✓ Active" : "Inactive"}
+          <p class="text-xs text-gray-500">Orders: ${tr.order_count || 0}</p>
+          <span class="inline-block px-2 py-1 text-xs rounded-full ${tr.status === 'approved' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}">
+            ${tr.status || "unknown"}
           </span>
         </div>
       </div>
       <div class="flex gap-2">
-        <button onclick="toggleTopRestaurant(${tr.id}, ${tr.is_active})" 
-          class="px-4 py-2 rounded-lg text-sm font-medium text-white transition-all duration-200 ${tr.is_active ? "bg-yellow-500 hover:bg-yellow-600" : "bg-blue-600 hover:bg-blue-700"}">
-          ${tr.is_active ? "Deactivate" : "Activate"}
+        <button onclick="toggleTopRestaurant(${tr.restaurant_id}, ${tr.is_top || 0})" 
+          class="px-4 py-2 rounded-lg text-sm font-medium text-white transition-all duration-200 ${tr.is_top ? "bg-yellow-500 hover:bg-yellow-600" : "bg-blue-600 hover:bg-blue-700"}">
+          ${tr.is_top ? "Deactivate" : "Activate"}
         </button>
-        <button onclick="removeTopRestaurant(${tr.id})" 
+        <button onclick="removeTopRestaurant(${tr.restaurant_id})" 
           class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200">
           Remove
         </button>
       </div>
     </div>
-  `).join("");
+  `;}).join("");
 }
 
 async function addTopRestaurant() {
@@ -1413,7 +1414,7 @@ async function removeBanner(id) {
 async function loadRestaurantsForMap() {
   try {
     console.log("🗺️ Loading restaurants for map...");
-    const res = await apiCall("/api/restaurants");
+    const res = await apiCall("/api/admin/all-restaurants");
     if (!res.success) {
       console.warn("Restaurants load failed for map");
       return;
