@@ -277,7 +277,7 @@ async function loadMenu() {
     
     list.innerHTML = data.map(m => `
       <div class="card bg-green-50 p-4 rounded-xl shadow flex flex-col">
-        ${m.image_url ? `<img src="${BASE}/uploads/${m.image_url}" class="h-32 w-full object-cover rounded mb-3" alt="${m.item_name}">` : `<div class="h-32 w-full bg-gray-300 rounded mb-3 flex items-center justify-center text-gray-600 text-sm">No Image</div>`}
+        ${m.image_url ? `<img src="${BASE}/uploads/${m.image_url}" class="h-32 w-full object-cover rounded mb-3" alt="${m.item_name}">` : `<div class="h-32 w-full bg-gradient-to-br from-gray-200 to-gray-300 rounded mb-3 flex items-center justify-center text-gray-500 text-2xl">📷</div>`}
         <h3 class="font-bold text-lg">${m.item_name}</h3>
         <p class="text-sm text-gray-500">${m.description || ''}</p>
         <p class="text-green-600 font-semibold">₹${m.price}</p>
@@ -311,6 +311,7 @@ document.getElementById("menuForm").addEventListener("submit", async (e) => {
     const item_name = document.getElementById("item_name").value.trim();
     const price = document.getElementById("price").value.trim();
     const description = document.getElementById("description").value.trim();
+    const imageFile = document.getElementById("item_image").files[0];
     
     // Get category (handle custom category)
     const catSelect = document.getElementById('categorySelect');
@@ -332,27 +333,55 @@ document.getElementById("menuForm").addEventListener("submit", async (e) => {
       return;
     }
     
-    // Build request body
-    const body = {
-      item_name,
-      price: Number(price),
-      description,
-      category,
-      is_veg
-    };
+    let res;
     
-    console.log("📝 Sending menu request:", body);
-    
-    // Send JSON request to /api/menu/add
-    const url = `${BASE}/api/menu/add?token=${encodeURIComponent(token || '')}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}` 
-      },
-      body: JSON.stringify(body)
-    });
+    // If image is selected, use multipart endpoint; otherwise use JSON endpoint
+    if (imageFile) {
+      console.log("📸 Image detected, using multipart endpoint...");
+      
+      // Build FormData for multipart/form-data
+      const formData = new FormData();
+      formData.append("item_name", item_name);
+      formData.append("price", Number(price));
+      formData.append("description", description);
+      formData.append("category", category);
+      formData.append("is_veg", is_veg);
+      formData.append("image", imageFile);
+      
+      console.log("📝 Sending menu with image...");
+      
+      // Send to /api/menu (multipart endpoint)
+      const url = `${BASE}/api/menu?token=${encodeURIComponent(token || '')}`;
+      res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+    } else {
+      console.log("📄 No image, using JSON endpoint...");
+      
+      // Build request body for JSON
+      const body = {
+        item_name,
+        price: Number(price),
+        description,
+        category,
+        is_veg
+      };
+      
+      console.log("📝 Sending menu request:", body);
+      
+      // Send JSON request to /api/menu/add
+      const url = `${BASE}/api/menu/add?token=${encodeURIComponent(token || '')}`;
+      res = await fetch(url, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify(body)
+      });
+    }
 
     const result = await res.json();
     console.log("📦 Response:", result);
