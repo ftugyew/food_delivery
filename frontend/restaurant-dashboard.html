@@ -253,13 +253,12 @@ async function updateOrder(orderId, status) {
 // ===== MENU =====
 async function loadMenu() {
   try {
-    let res = await fetch(`${BASE}/api/menu/my`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    // Use /api/menu/restaurant/:restaurant_id endpoint
+    let res = await fetch(`${BASE}/api/menu/restaurant/${restaurantId}`);
     let result = await res.json();
     
-    // Handle new response format { success, data }
-    let data = result.data || result || [];
+    // Handle both array and object responses
+    let data = Array.isArray(result) ? result : (result.data || []);
     if (!Array.isArray(data)) {
       console.error("Invalid menu data format:", result);
       data = [];
@@ -275,52 +274,100 @@ async function loadMenu() {
       list.innerHTML = `<p class="text-gray-500 col-span-2 text-center">No dishes added yet.</p>`;
       return;
     }
+    
     list.innerHTML = data.map(m => `
       <div class="card bg-green-50 p-4 rounded-xl shadow flex flex-col">
-        ${m.image_url ? `<img src="${BASE}/uploads/${m.image_url}" class="h-32 w-full object-cover rounded mb-3">` : ""}
+        ${m.image_url ? `<img src="${BASE}/uploads/${m.image_url}" class="h-32 w-full object-cover rounded mb-3" alt="${m.item_name}">` : `<div class="h-32 w-full bg-gray-300 rounded mb-3 flex items-center justify-center text-gray-600 text-sm">No Image</div>`}
         <h3 class="font-bold text-lg">${m.item_name}</h3>
         <p class="text-sm text-gray-500">${m.description || ''}</p>
         <p class="text-green-600 font-semibold">₹${m.price}</p>
+        <p class="text-xs text-gray-500 mt-1">${m.is_veg ? '🥬 Veg' : '🍗 Non-Veg'}</p>
         <div class="flex gap-2 mt-3">
           <button onclick="editItem(${m.id}, '${m.item_name}', ${m.price}, '${m.description || ''}')" class="bg-yellow-500 text-white px-3 py-1 rounded text-sm">Edit</button>
           <button onclick="deleteItem(${m.id})" class="bg-red-500 text-white px-3 py-1 rounded text-sm">Delete</button>
         </div>
       </div>
     `).join("");
+    
+    console.log(`✅ Loaded ${data.length} menu items`);
   } catch (err) {
     console.error("Error loading menu:", err);
+    const list = document.getElementById("menuList");
+    if (list) {
+      list.innerHTML = `<p class="text-red-500 col-span-2 text-center">Error loading menu</p>`;
+    }
   }
 }
 
 document.getElementById("menuForm").addEventListener("submit", async (e) => {
-  e.preventDefault(); // ✅ Prevent reload
+  e.preventDefault();
   const btn = e.target.querySelector("button[type='submit']");
   btn.disabled = true;
   const originalText = btn.textContent;
   btn.textContent = "⏳ Adding...";
 
   try {
-    const formData = new FormData(e.target);
-    // If user entered a custom category, overwrite the category field
+    // Get form values
+    const item_name = document.getElementById("item_name").value.trim();
+    const price = document.getElementById("price").value.trim();
+    const description = document.getElementById("description").value.trim();
+    
+    // Get category (handle custom category)
     const catSelect = document.getElementById('categorySelect');
     const customInput = document.getElementById('categoryCustom');
-    if (catSelect && customInput && catSelect.value === 'Other' && customInput.value.trim()) {
-      formData.set('category', customInput.value.trim());
+    let category = catSelect.value;
+    if (category === 'Other' && customInput.value.trim()) {
+      category = customInput.value.trim();
     }
-    // Some browsers/hosts strip Authorization on multipart/form-data preflights — include token as query fallback
-    const url = `${BASE}/api/menu?token=${encodeURIComponent(token || '')}`;
+    
+    // Convert is_veg from form value
+    const isVegValue = document.getElementById('isVeg').value;
+    const is_veg = isVegValue === 'veg' ? 1 : 0;
+    
+    // Validate required fields
+    if (!item_name || !price) {
+      showToast("❌ Item name and price are required", false);
+      btn.disabled = false;
+      btn.textContent = originalText;
+      return;
+    }
+    
+    // Build request body
+    const body = {
+      item_name,
+      price: Number(price),
+      description,
+      category,
+      is_veg
+    };
+    
+    console.log("📝 Sending menu request:", body);
+    
+    // Send JSON request to /api/menu/add
+    const url = `${BASE}/api/menu/add?token=${encodeURIComponent(token || '')}`;
     const res = await fetch(url, {
       method: "POST",
-      // Keep Authorization header where possible
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData
+      headers: { 
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}` 
+      },
+      body: JSON.stringify(body)
     });
 
     const result = await res.json();
-    if (res.ok && result.message) {
-      showToast("✅ Dish added successfully!");
+    console.log("📦 Response:", result);
+    
+    if (res.ok && result.success) {
+      showToast("✅ " + (result.message || "Dish added successfully!"));
       e.target.reset();
-      loadMenu();
+      // Reset is_veg to default
+      document.getElementById('isVeg').value = 'veg';
+      document.getElementById('vegBtn').classList.add('bg-green-600', 'text-white');
+      document.getElementById('vegBtn').classList.remove('bg-green-100', 'text-green-700');
+      document.getElementById('nonVegBtn').classList.remove('bg-red-600', 'text-white');
+      document.getElementById('nonVegBtn').classList.add('bg-red-100', 'text-red-700');
+      // Reload menu
+      await loadMenu();
     } else {
       const errorMsg = result.error || result.details || "Failed to add dish";
       console.error("Add dish error:", errorMsg, result);
