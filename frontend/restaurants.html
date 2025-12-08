@@ -84,27 +84,28 @@ function renderAll(list){
   
   console.log(`📋 Rendering ${list.length} restaurants`);
   container.innerHTML = list.map(r => {
+    
     const imageUrl = r.image_url ? `${HOST_BASE}/uploads/${r.image_url}` : 'https://via.placeholder.com/200?text=No+Image';
     return `
-    <div class="card rounded-2xl overflow-hidden cursor-pointer transition transform group" onclick="window.location.href='restaurant.html?id=${r.id}'">
-      <div class="h-48 relative">
-        <img src="${imageUrl || 'https://dummyimage.com/300x200/cccccc/000000&text=No+Image'}"
-     class="h-full w-full object-cover"
-     alt="${r.name || 'Restaurant'}"
-     onerror="this.src='/images/no-image.png'"
+<div class="card rounded-2xl overflow-hidden cursor-pointer transition transform group" onclick="window.location.href='restaurant.html?id=${r.id}'">
+  <div class="h-48 relative">
+    <img src="${imageUrl || '/images/no-image.png'}"
+         class="h-full w-full object-cover"
+         alt="${r.name || 'Restaurant'}"
+         onerror="this.src='/images/no-image.png'" />
+  </div>
+  <div class="p-6">
+    <h3 class="text-xl font-bold text-gray-800 mb-2">${r.name || 'Restaurant'}</h3>
+    <p class="text-gray-600 mb-1">${r.cuisine || 'Multi Cuisine'}</p>
+    <p class="text-gray-500 text-sm mb-3">${r.address || 'Location'}</p>
+    <div class="flex items-center justify-between">
+      <span class="text-green-600 font-semibold">⭐ ${r.rating || '4.0'} · ${r.eta || '30'} mins</span>
+      <a href="restaurant.html?id=${r.id}" class="btn-see">View</a>
+    </div>
+  </div>
+</div>
+`;
 
-
-      </div>
-      <div class="p-6">
-        <h3 class="text-xl font-bold text-gray-800 mb-2">${r.name || 'Restaurant'}</h3>
-        <p class="text-gray-600 mb-1">${r.cuisine || 'Multi Cuisine'}</p>
-        <p class="text-gray-500 text-sm mb-3">${r.address || 'Location'}</p>
-        <div class="flex items-center justify-between">
-          <span class="text-green-600 font-semibold">⭐ ${r.rating || '4.0'} · ${r.eta || '30'} mins</span>
-          <a href="restaurant.html?id=${r.id}" class="btn-see">View</a>
-        </div>
-      </div>
-    </div>`;
   }).join('');
 }
 
