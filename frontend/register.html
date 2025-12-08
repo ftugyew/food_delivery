@@ -237,108 +237,102 @@
     const password = document.getElementById("password_input").value.trim();
     const role = document.getElementById("role_input").value;
 
-    // Get restaurant-specific data if role is restaurant
-    let restaurantData = {};
-    if (role === "restaurant") {
-      restaurantData = {
-        restaurant_name: document.getElementById("restaurant_name_input").value.trim(),
-        description: document.getElementById("restaurant_description_input").value.trim(),
-        cuisine: document.getElementById("cuisine_input").value,
-        eta: parseInt(document.getElementById("eta_input").value) || 30,
-        photo: document.getElementById("restaurant_photo_input").files[0]
-      };
-
-      // Validate restaurant fields
-      if (!restaurantData.restaurant_name) {
-        alert("Please enter your restaurant name");
-        return;
-      }
-      if (!restaurantData.cuisine) {
-        alert("Please select a cuisine type");
-        return;
-      }
-    }
-
-    // Get delivery-agent-specific data
-    let deliveryData = {};
-    if (role === "delivery_agent") {
-      const aadhar = document.getElementById("aadhar_input").value.trim();
-      const vehicleType = document.getElementById("vehicle_type_input").value;
-      const licenceImage = document.getElementById("licence_image_input").files[0] || null;
-
-      // Basic validation
-      if (!/^\d{12}$/.test(aadhar)) {
-        alert("Please enter a valid 12-digit Aadhaar number");
-        return;
-      }
-      if (!vehicleType) {
-        alert("Please select a vehicle type");
-        return;
-      }
-
-      deliveryData = { aadhar, vehicle_type: vehicleType, has_licence_image: !!licenceImage };
+    // Validate basic fields
+    if (!name || !email || !password || !phone) {
+      alert("Please fill in all required fields");
+      return;
     }
 
     try {
-      // Validate basic fields
-      if (!name || !email || !password || !phone) {
-        alert("Please fill in all required fields");
-        return;
-      }
+      // ===== USE FORMDATA FOR FILE UPLOAD SUPPORT =====
+      const formData = new FormData();
+      formData.append("name", name);
+      formData.append("email", email);
+      formData.append("password", password);
+      formData.append("phone", phone);
+      formData.append("role", role);
 
-      // Build the request payload
-      const payload = { 
-        name, 
-        email, 
-        password,
-        phone,
-        role
-      };
-
-      // Add role-specific data
+      // Add restaurant-specific data if role is restaurant
       if (role === "restaurant") {
-        payload.restaurant_name = restaurantData.restaurant_name;
-        payload.description = restaurantData.description;
-        payload.cuisine = restaurantData.cuisine;
-        payload.eta = restaurantData.eta;
-      } else if (role === "delivery_agent") {
-        payload.vehicle_type = deliveryData.vehicle_type;
-        payload.aadhar = deliveryData.aadhar;
+        const restaurantName = document.getElementById("restaurant_name_input").value.trim();
+        const cuisine = document.getElementById("cuisine_input").value;
+        const description = document.getElementById("restaurant_description_input").value.trim();
+        const eta = parseInt(document.getElementById("eta_input").value) || 30;
+        const photoFile = document.getElementById("restaurant_photo_input").files[0];
+
+        // Validate restaurant fields
+        if (!restaurantName) {
+          alert("Please enter your restaurant name");
+          return;
+        }
+        if (!cuisine) {
+          alert("Please select a cuisine type");
+          return;
+        }
+
+        formData.append("restaurant_name", restaurantName);
+        formData.append("cuisine", cuisine);
+        formData.append("description", description);
+        formData.append("eta", eta);
+        
+        // Append photo file if selected
+        if (photoFile) {
+          formData.append("photo", photoFile);
+          console.log("📸 Restaurant photo attached:", photoFile.name);
+        }
       }
 
-      // Use hardcoded backend URL
+      // Add delivery-agent-specific data
+      if (role === "delivery_agent") {
+        const aadhar = document.getElementById("aadhar_input").value.trim();
+        const vehicleType = document.getElementById("vehicle_type_input").value;
+
+        // Basic validation
+        if (!/^\d{12}$/.test(aadhar)) {
+          alert("Please enter a valid 12-digit Aadhaar number");
+          return;
+        }
+        if (!vehicleType) {
+          alert("Please select a vehicle type");
+          return;
+        }
+
+        formData.append("aadhar", aadhar);
+        formData.append("vehicle_type", vehicleType);
+      }
+
+      console.log("📤 Sending registration request...");
+
+      // ===== SEND FORMDATA (NO Content-Type header - browser sets it automatically) =====
       const res = await fetch(`https://food-delivery-backend-cw3m.onrender.com/api/auth/register`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: formData // FormData automatically sets correct Content-Type with boundary
       });
+
       const json = await res.json();
+      console.log("📥 Registration response:", json);
 
       if(res.ok && json.success){
         // Show success message
-        alert("✅ Registration successful!");
+        alert("✅ " + json.message);
         
         // Role-specific handling
         if (role === "restaurant") {
-          alert("Your restaurant registration is pending admin approval");
+          alert("Your restaurant registration is pending admin approval. You'll be notified once approved.");
           window.location.href = "login.html";
         } else if (role === "customer") {
-          window.location.href = "index.html";
-        } else if (role === "admin") {
-          window.location.href = "admin-dashboard.html";
+          window.location.href = "login.html";
+        } else if (role === "delivery_agent") {
+          window.location.href = "login.html";
         } else {
-          // Default for other roles (delivery_agent, etc.)
           window.location.href = "login.html";
         }
-      } else if(res.status === 400) {
-        // Show backend error from response
-        alert("❌ " + (json.error || "Registration failed"));
       } else {
         alert("❌ " + (json.error || json.message || "Registration failed"));
       }
     } catch(err){
-      alert("Server offline. Try later");
-      console.error(err);
+      alert("❌ Server connection failed. Please try again later.");
+      console.error("Registration error:", err);
     }
   });
 
