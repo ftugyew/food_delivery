@@ -47,35 +47,48 @@ const HOST_BASE = API_BASE_URL.replace(/\/api$/, "");
 
 async function loadAllRestaurants(){
   try{
+    console.log("🔄 Fetching restaurants from:", `${API_BASE_URL}/restaurants`);
     const res = await fetch(`${API_BASE_URL}/restaurants`);
+    
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
+    
     const data = await res.json();
-    console.log("Restaurants loaded:", data);
-    renderAll(data || []);
+    console.log("✅ Restaurants loaded:", data);
+    
+    // Handle both array and object responses
+    const restaurants = Array.isArray(data) ? data : (data.data || []);
+    renderAll(restaurants);
   } catch(e){
-    console.error('Failed to load restaurants:', e);
+    console.error('❌ Failed to load restaurants:', e);
     const container = document.getElementById('all-restaurants');
     if (container) {
-      container.innerHTML = '<p class="text-gray-500">No restaurants available</p>';
+      container.innerHTML = '<p class="text-red-500 col-span-3 text-center">Failed to load restaurants. Please check your connection.</p>';
     }
   }
 }
 
 function renderAll(list){
   const container = document.getElementById('all-restaurants');
-  if(!container) return;
-  if(!list.length){ 
-    container.innerHTML = '<p class="text-gray-500">No restaurants available</p>'; 
+  if(!container) {
+    console.error("❌ Container 'all-restaurants' not found");
+    return;
+  }
+  
+  if(!list || !list.length){ 
+    console.warn("⚠️ No restaurants found");
+    container.innerHTML = '<p class="text-gray-500 col-span-3 text-center">No restaurants available</p>'; 
     return; 
   }
+  
+  console.log(`📋 Rendering ${list.length} restaurants`);
   container.innerHTML = list.map(r => {
-    const imageUrl = r.image_url ? `${HOST_BASE}/uploads/${r.image_url}` : 'https://via.placeholder.com/200';
+    const imageUrl = r.image_url ? `${HOST_BASE}/uploads/${r.image_url}` : 'https://via.placeholder.com/200?text=No+Image';
     return `
     <div class="card rounded-2xl overflow-hidden cursor-pointer transition transform group" onclick="window.location.href='restaurant.html?id=${r.id}'">
       <div class="h-48 relative">
-        <img src="${imageUrl}" class="h-full w-full object-cover" alt="${r.name || 'Restaurant'}" onerror="this.src='https://via.placeholder.com/200'">
+        <img src="${imageUrl}" class="h-full w-full object-cover" alt="${r.name || 'Restaurant'}" onerror="this.src='https://via.placeholder.com/200?text=No+Image'">
       </div>
       <div class="p-6">
         <h3 class="text-xl font-bold text-gray-800 mb-2">${r.name || 'Restaurant'}</h3>
@@ -90,7 +103,7 @@ function renderAll(list){
   }).join('');
 }
 
-// Kick off
+// Load restaurants when page is ready
 loadAllRestaurants();
 </script>
 </body>
