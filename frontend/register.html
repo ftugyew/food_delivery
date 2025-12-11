@@ -277,7 +277,7 @@
         
         // Append photo file if selected
         if (photoFile) {
-          formData.append("photo", photoFile);
+          formData.append("restaurantImage", photoFile);
           console.log("📸 Restaurant photo attached:", photoFile.name);
         }
       }
@@ -344,13 +344,5 @@
       toggleRoleFields();
     }
   });
-
-document.addEventListener("DOMContentLoaded", () => {
-  const roleEl = document.getElementById("role_input");
-  if (roleEl) {
-    roleEl.addEventListener("change", toggleRoleFields);
-    toggleRoleFields();
-  }
-});
 
 </script>
