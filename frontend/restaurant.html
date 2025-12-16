@@ -134,8 +134,9 @@
 
   <script>
     lucide.createIcons();
- const API_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com/api";
- const IMAGE_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com/uploads";
+    const API_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com";
+    const IMAGE_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com";
+    const BASE = IMAGE_BASE_URL;
 
     const restaurantId = new URLSearchParams(window.location.search).get('id');
     console.log('Debug: restaurantId from URL =', restaurantId);
@@ -149,7 +150,7 @@
       // ===== Fetch restaurant info + menu from new backend =====
       console.log("Debug: Fetching restaurant & menu for restaurantId =", restaurantId);
 
-      fetch(`${API_BASE_URL}/api/restaurants/${restaurantId}/menu`)
+      fetch(`${API_BASE_URL}/restaurants/${restaurantId}/menu`)
         .then(res => {
           console.log("Debug: Menu API response status =", res.status);
           if (!res.ok) {
@@ -166,9 +167,17 @@
             document.getElementById('restaurant-name').textContent = rest.name;
             document.getElementById('restaurant-desc').textContent = rest.description || 'Delicious food from Tindo partner restaurant 🍴';
             document.getElementById('restaurant-eta').textContent = `⏱️ ${rest.eta || 30} mins delivery`;
-            document.getElementById('restaurant-image').src = rest.image_url && rest.image_url.startsWith('https')
-              ? rest.image_url
-              : (rest.image_url ? `${API_BASE_URL}/uploads/${rest.image_url}` : 'images/placeholder.jpg');
+            const imgEl = document.getElementById('restaurant-image');
+            let imgSrc = 'images/placeholder.jpg';
+            if (rest.image_url_full) {
+              imgSrc = rest.image_url_full;
+            } else if (rest.image_url && rest.image_url.startsWith('http')) {
+              imgSrc = rest.image_url;
+            } else if (rest.image_url) {
+              imgSrc = `${IMAGE_BASE_URL}/uploads/restaurants/${rest.image_url}`;
+            }
+            imgEl.src = imgSrc;
+            imgEl.onerror = () => { imgEl.src = 'images/placeholder.jpg'; };
           } else {
             console.error("Error: Restaurant not found in response");
           }
@@ -313,9 +322,10 @@
         subtotal += item.price * item.qty;
         const node = document.createElement('div');
         node.className = 'cart-item flex items-center justify-between gap-3 p-3 rounded-lg border bg-gray-50';
+        const cartImgSrc = item.image_url_full || (item.image_url ? `${IMAGE_BASE_URL}/uploads/menu/${item.image_url}` : 'images/placeholder.jpg');
         node.innerHTML = `
           <div class="flex items-center gap-3">
-            <img src="${BASE}/uploads/${item.image_url}" class="w-14 h-14 object-cover rounded-lg border" alt="${item.name}">
+            <img src="${cartImgSrc}" class="w-14 h-14 object-cover rounded-lg border" alt="${item.name}" onerror="this.src='images/placeholder.jpg'">
             <div>
               <div class="font-semibold text-green-700">${item.name}</div>
               <div class="text-sm text-gray-500">₹${item.price} × ${item.qty}</div>
@@ -434,9 +444,18 @@
         window.__menuIndex[did] = { name: dish.item_name, price: Number(dish.price), image_url: dish.image_url || '', restaurant_id: Number(restaurantId) };
         // veg badge
         const vegBadge = isVegItem(dish) ? `<span class="absolute top-3 right-3 bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs">🥬 Veg</span>` : `<span class="absolute top-3 right-3 bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs">🍗 Non‑Veg</span>`;
+        let dishImageSrc = null;
+        if (dish.image_url_full) {
+          dishImageSrc = dish.image_url_full;
+        } else if (dish.image_url && dish.image_url.startsWith('http')) {
+          dishImageSrc = dish.image_url;
+        } else if (dish.image_url) {
+          dishImageSrc = `${IMAGE_BASE_URL}/uploads/menu/${dish.image_url}`;
+        }
+        const dishImgHtml = dishImageSrc ? `<img src="${dishImageSrc}" class="w-full h-44 object-cover rounded-xl mb-3" onerror="this.src='images/placeholder.jpg'">` : `<div class="w-full h-44 bg-gray-200 rounded-xl mb-3 flex items-center justify-center text-gray-500">No Image</div>`;
         card.innerHTML = `
           ${vegBadge}
-          ${dish.image_url ? `<img src="${BASE}/uploads/${dish.image_url}" class="w-full h-44 object-cover rounded-xl mb-3">` : `<div class="w-full h-44 bg-gray-200 rounded-xl mb-3 flex items-center justify-center text-gray-500">No Image</div>`}
+          ${dishImgHtml}
           <h4 class="text-lg font-semibold text-green-700">${dish.item_name}</h4>
           <p class="text-gray-600 mb-2">${dish.description || ''}</p>
           <p class="text-green-700 font-bold text-lg mb-2">₹${dish.price}</p>
