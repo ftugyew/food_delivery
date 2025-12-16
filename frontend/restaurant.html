@@ -134,7 +134,7 @@
 
   <script>
     lucide.createIcons();
-    const API_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com";
+    const API_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com/api";
     const IMAGE_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com";
     const BASE = IMAGE_BASE_URL;
 
@@ -150,7 +150,7 @@
       // ===== Fetch restaurant info + menu from new backend =====
       console.log("Debug: Fetching restaurant & menu for restaurantId =", restaurantId);
 
-      fetch(`${API_BASE_URL}/restaurants/${restaurantId}/menu`)
+      fetch(`${API_BASE_URL}/restaurant/${restaurantId}/menu`)
         .then(res => {
           console.log("Debug: Menu API response status =", res.status);
           if (!res.ok) {
