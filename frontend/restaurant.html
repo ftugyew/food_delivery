@@ -166,7 +166,7 @@
             document.getElementById('restaurant-name').textContent = rest.name;
             document.getElementById('restaurant-desc').textContent = rest.description || 'Delicious food from Tindo partner restaurant 🍴';
             document.getElementById('restaurant-eta').textContent = `⏱️ ${rest.eta || 30} mins delivery`;
-            document.getElementById('restaurant-image').src = rest.image_url && rest.image_url.startsWith('http')
+            document.getElementById('restaurant-image').src = rest.image_url && rest.image_url.startsWith('https')
               ? rest.image_url
               : (rest.image_url ? `${API_BASE_URL}/uploads/${rest.image_url}` : 'images/placeholder.jpg');
           } else {
