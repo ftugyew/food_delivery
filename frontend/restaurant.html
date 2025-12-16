@@ -48,7 +48,7 @@
 
   <!-- Restaurant Banner -->
   <section class="max-w-5xl mx-auto mt-8 bg-white shadow-lg rounded-2xl overflow-hidden flex flex-col md:flex-row items-center p-6">
-    <img id="restaurant-image" src="images/placeholder.jpg" alt="Restaurant" class="w-full md:w-1/3 rounded-xl object-cover">
+    <img id="restaurant-image" src="assets/images/placeholder.jpg" alt="Restaurant" class="w-full md:w-1/3 rounded-xl object-cover">
     <div class="md:ml-6 mt-4 md:mt-0">
       <h2 id="restaurant-name" class="text-3xl font-bold text-green-700 mb-2">Restaurant Name</h2>
       <p id="restaurant-desc" class="text-gray-600 mb-3">Authentic taste, hot and fresh meals served with love 💚</p>
@@ -134,7 +134,8 @@
 
   <script>
     lucide.createIcons();
-    const API_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com/api/restaurant";
+    // Use API root (no trailing resource) so we can call multiple endpoints
+    const API_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com/api";
     const IMAGE_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com";
     const BASE = IMAGE_BASE_URL;
 
@@ -147,31 +148,101 @@
       document.getElementById('no-dishes').textContent = "Invalid restaurant ID 😔";
       document.getElementById('no-dishes').classList.remove('hidden');
     } else {
-      // ===== Fetch restaurant info + menu from new backend =====
+      // ===== Fetch restaurant info + menu with fallbacks =====
       console.log("Debug: Fetching restaurant & menu for restaurantId =", restaurantId);
 
-      fetch(`${API_BASE_URL}/${restaurantId}/menu`)
-        .then(res => {
-          console.log("Debug: Menu API response status =", res.status);
-          if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
+      async function fetchRestaurantMenuWithFallback(id) {
+        // Pinned to the confirmed working endpoint
+        const attempts = [
+          `${API_BASE_URL}/menu/restaurant/${id}`
+        ];
+        for (const url of attempts) {
+          try {
+            console.log('Attempting menu fetch:', url);
+            const res = await fetch(url);
+            if (!res.ok) { console.warn('Menu fetch failed status', res.status, 'for', url); continue; }
+            const body = await res.json();
+
+            // Accept { success:true, data:[...] }
+            if (body && body.success && Array.isArray(body.data)) {
+              try {
+                const rres = await fetch(`${API_BASE_URL}/restaurants/${id}`);
+                const rbody = await rres.json();
+                const restaurant = (rbody && rbody.data) ? rbody.data : null;
+                return { success: true, data: { restaurant, items: body.data } };
+              } catch {
+                return { success: true, data: { restaurant: null, items: body.data } };
+              }
+            }
+
+            // Accept { menu:[...] } or { data:{ menu:[...] } }
+            if (body && Array.isArray(body.menu)) {
+              try {
+                const rres = await fetch(`${API_BASE_URL}/restaurants/${id}`);
+                const rbody = await rres.json();
+                const restaurant = (rbody && rbody.data) ? rbody.data : null;
+                return { success: true, data: { restaurant, items: body.menu } };
+              } catch {
+                return { success: true, data: { restaurant: null, items: body.menu } };
+              }
+            }
+            if (body && body.data && Array.isArray(body.data.menu)) {
+              return { success: true, data: { restaurant: body.data.restaurant || null, items: body.data.menu } };
+            }
+
+            // Case 1: { success: true, data: { restaurant, items } }
+            if (body && body.success && body.data) return body;
+
+            // Case 2: { restaurant, items } directly
+            if (body && body.restaurant && (body.items || Array.isArray(body))) {
+              return { success: true, data: { restaurant: body.restaurant || null, items: body.items || (Array.isArray(body) ? body : []) } };
+            }
+
+            // Case 3: Array of items only → fetch restaurant details separately
+            if (Array.isArray(body)) {
+              try {
+                const rres = await fetch(`${API_BASE_URL}/restaurants/${id}`);
+                const rbody = await rres.json();
+                const restaurant = (rbody && rbody.data) ? rbody.data : null;
+                return { success: true, data: { restaurant, items: body } };
+              } catch (e) {
+                console.warn('Restaurant details fetch failed after items list:', e.message);
+                return { success: true, data: { restaurant: null, items: body } };
+              }
+            }
+
+            // Case 4: detect items/data shapes loosely
+            if (body && (body.items || body.data || body.records)) {
+              const restaurant = body.data && body.data.restaurant ? body.data.restaurant : null;
+              const items = body.items
+                || (Array.isArray(body.data) ? body.data : (body.data && body.data.items))
+                || (Array.isArray(body.records) ? body.records : [])
+                || [];
+              return { success: true, data: { restaurant, items } };
+            }
+          } catch (err) {
+            console.warn('Menu fetch error for', url, err?.message || err);
+            continue;
           }
-          return res.json();
-        })
+        }
+        throw new Error('All menu endpoints failed');
+      }
+
+      fetchRestaurantMenuWithFallback(restaurantId)
         .then(payload => {
           const data = payload && payload.data ? payload.data : {};
           const rest = data.restaurant || null;
           const dishes = data.items || [];
 
           if (rest) {
-            document.getElementById('restaurant-name').textContent = rest.name;
+            document.getElementById('restaurant-name').textContent = rest.name || 'Restaurant';
             document.getElementById('restaurant-desc').textContent = rest.description || 'Delicious food from Tindo partner restaurant 🍴';
             document.getElementById('restaurant-eta').textContent = `⏱️ ${rest.eta || 30} mins delivery`;
             const imgEl = document.getElementById('restaurant-image');
-            let imgSrc = 'images/placeholder.jpg';
+            let imgSrc = 'assets/images/placeholder.jpg';
             if (rest.image_url_full) {
               imgSrc = rest.image_url_full;
-            } else if (rest.image_url && rest.image_url.startsWith('http')) {
+            } else if (rest.image_url && String(rest.image_url).startsWith('http')) {
               imgSrc = rest.image_url;
             } else if (rest.image_url) {
               imgSrc = `${IMAGE_BASE_URL}/uploads/restaurants/${rest.image_url}`;
@@ -179,22 +250,28 @@
             imgEl.src = imgSrc;
             imgEl.onerror = () => { imgEl.src = 'images/placeholder.jpg'; };
           } else {
-            console.error("Error: Restaurant not found in response");
+            console.warn('Restaurant details missing; header will use defaults');
           }
 
-          console.log("Debug: Dishes fetched =", dishes);
+          console.log('Debug: Dishes fetched =', dishes);
           window.__restaurantDishes = dishes || [];
           window.__menuIndex = window.__menuIndex || {};
-          (window.__restaurantDishes || []).forEach(d => {
-            const id = d.id;
-            window.__menuIndex[id] = { name: d.item_name, price: Number(d.price), image_url: d.image_url || '', restaurant_id: Number(restaurantId) };
+          (window.__restaurantDishes || []).forEach((d, idx) => {
+            const id = Number(d.id ?? d.item_id ?? d.menu_id ?? d.dish_id ?? d._id ?? (idx + 1));
+            d._client_id = id;
+            window.__menuIndex[id] = {
+              name: d.item_name ?? d.name ?? d.title ?? `Item ${id}`,
+              price: Number(d.price ?? d.cost ?? d.amount ?? 0),
+              image_url: d.image_url ?? d.imageUrl ?? d.image ?? d.photo ?? '',
+              image_url_full: d.image_url_full ?? d.imageUrlFull ?? d.image_full ?? null,
+              restaurant_id: Number(restaurantId)
+            };
           });
           renderMenu();
         })
         .catch(err => {
-          console.error("Error fetching restaurant/menu:", err);
-          alert("Server offline. Try later");
-          document.getElementById('no-dishes').textContent = "Failed to load menu 😔";
+          console.error('Error fetching restaurant/menu:', err);
+          document.getElementById('no-dishes').textContent = 'Failed to load menu 😔';
           document.getElementById('no-dishes').classList.remove('hidden');
         });
     }
@@ -372,14 +449,16 @@
       syncMenuButtons();
     });
 
-    panelProceed.addEventListener('click', () => {
-      const cart = getCart();
-      if (!cart.length) return alert('Your cart is empty!');
-      // reuse existing proceed behavior
-      localStorage.setItem('cartItems', JSON.stringify(cart));
-      localStorage.setItem('selectedRestaurantId', cart[0]?.restaurant_id || restaurantId);
-      window.location.href = 'user-address.html';
-    });
+    if (panelProceed) {
+      panelProceed.addEventListener('click', () => {
+        const cart = getCart();
+        if (!cart.length) return alert('Your cart is empty!');
+        // reuse existing proceed behavior
+        localStorage.setItem('cartItems', JSON.stringify(cart));
+        localStorage.setItem('selectedRestaurantId', cart[0]?.restaurant_id || restaurantId);
+        window.location.href = 'user-address.html';
+      });
+    }
 
     // Keep menu buttons' state in sync with panel changes
     function syncMenuButtons() {
@@ -436,30 +515,38 @@
         return;
       }
       emptyMsg.classList.add('hidden');
-      filtered.forEach(dish => {
+      filtered.forEach((dish, idx) => {
         const card = document.createElement('div');
         card.className = "card hover-lift p-4 shadow transition border border-gray-100 relative group reveal";
-        const did = dish.id;
+        const did = Number(dish._client_id ?? dish.id ?? dish.item_id ?? dish.menu_id ?? dish.dish_id ?? dish._id ?? (idx + 1));
         // ensure menu index exists
         window.__menuIndex = window.__menuIndex || {};
-        window.__menuIndex[did] = { name: dish.item_name, price: Number(dish.price), image_url: dish.image_url || '', restaurant_id: Number(restaurantId) };
+        window.__menuIndex[did] = {
+          name: dish.item_name ?? dish.name ?? dish.title ?? `Item ${did}`,
+          price: Number(dish.price ?? dish.cost ?? dish.amount ?? 0),
+          image_url: dish.image_url ?? dish.imageUrl ?? dish.image ?? dish.photo ?? '',
+          image_url_full: dish.image_url_full ?? dish.imageUrlFull ?? dish.image_full ?? null,
+          restaurant_id: Number(restaurantId)
+        };
         // veg badge
         const vegBadge = isVegItem(dish) ? `<span class="absolute top-3 right-3 bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs">🥬 Veg</span>` : `<span class="absolute top-3 right-3 bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs">🍗 Non‑Veg</span>`;
         let dishImageSrc = null;
-        if (dish.image_url_full) {
-          dishImageSrc = dish.image_url_full;
-        } else if (dish.image_url && dish.image_url.startsWith('http')) {
-          dishImageSrc = dish.image_url;
-        } else if (dish.image_url) {
-          dishImageSrc = `${IMAGE_BASE_URL}/uploads/menu/${dish.image_url}`;
+        const metaImgFull = window.__menuIndex[did].image_url_full;
+        const metaImg = window.__menuIndex[did].image_url;
+        if (metaImgFull) {
+          dishImageSrc = metaImgFull;
+        } else if (metaImg && String(metaImg).startsWith('http')) {
+          dishImageSrc = metaImg;
+        } else if (metaImg) {
+          dishImageSrc = `${IMAGE_BASE_URL}/uploads/menu/${metaImg}`;
         }
         const dishImgHtml = dishImageSrc ? `<img src="${dishImageSrc}" class="w-full h-44 object-cover rounded-xl mb-3" onerror="this.src='images/placeholder.jpg'">` : `<div class="w-full h-44 bg-gray-200 rounded-xl mb-3 flex items-center justify-center text-gray-500">No Image</div>`;
         card.innerHTML = `
           ${vegBadge}
           ${dishImgHtml}
-          <h4 class="text-lg font-semibold text-green-700">${dish.item_name}</h4>
-          <p class="text-gray-600 mb-2">${dish.description || ''}</p>
-          <p class="text-green-700 font-bold text-lg mb-2">₹${dish.price}</p>
+          <h4 class="text-lg font-semibold text-green-700">${dish.item_name ?? dish.name ?? dish.title ?? 'Item'}</h4>
+          <p class="text-gray-600 mb-2">${dish.description ?? dish.desc ?? dish.details ?? ''}</p>
+          <p class="text-green-700 font-bold text-lg mb-2">₹${dish.price ?? dish.cost ?? dish.amount ?? 0}</p>
           <button id="add-btn-${did}" onclick="addToCartUI(${did})" data-wish data-ripple class="btn btn-primary w-full relative flex items-center justify-center gap-2">
             <span class="btn-label">Add to Cart</span>
           </button>
