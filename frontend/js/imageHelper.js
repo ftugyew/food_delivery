@@ -1,7 +1,7 @@
 // js/imageHelper.js - Centralized image URL handling
 
 const IMAGE_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com";
-const PLACEHOLDER_IMAGE = "images/placeholder.jpg";
+const PLACEHOLDER_IMAGE = "assets/png.jpg";
 
 /**
  * Build menu image URL
