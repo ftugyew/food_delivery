@@ -340,9 +340,11 @@
     function viewDetails(name, desc, price, img) {
   const modal = document.createElement('div');
       modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50";
+      const rel = img ? (String(img).includes('menu/') ? img : `menu/${img}`) : null;
+      const safeSrc = rel ? `${BASE}/uploads/${rel}` : 'images/placeholder.jpg';
       modal.innerHTML = `
         <div class="bg-white p-6 rounded-2xl shadow-xl max-w-sm text-center relative">
-          <img src="${BASE}/uploads/menu/${img}" class="w-full h-48 object-cover rounded-xl mb-3">
+          <img src="${safeSrc}" class="w-full h-48 object-cover rounded-xl mb-3" onerror="this.src='images/placeholder.jpg'">
           <h3 class="text-xl font-bold text-green-700 mb-1">${name}</h3>
           <p class="text-gray-600 mb-2">${desc || ''}</p>
           <p class="text-green-700 font-bold text-lg mb-4">₹${price}</p>
@@ -400,7 +402,8 @@
         subtotal += item.price * item.qty;
         const node = document.createElement('div');
         node.className = 'cart-item flex items-center justify-between gap-3 p-3 rounded-lg border bg-gray-50';
-        const cartImgSrc = item.image_url_full || (item.image_url ? `${IMAGE_BASE_URL}/uploads/menu/${item.image_url}` : 'images/placeholder.jpg');
+        const normalizedRel = item.image_url ? (String(item.image_url).includes('menu/') ? item.image_url : `menu/${item.image_url}`) : null;
+        const cartImgSrc = item.image_url_full || (normalizedRel ? `${IMAGE_BASE_URL}/uploads/${normalizedRel}` : 'images/placeholder.jpg');
         node.innerHTML = `
           <div class="flex items-center gap-3">
             <img src="${cartImgSrc}" class="w-14 h-14 object-cover rounded-lg border" alt="${item.name}" onerror="this.src='images/placeholder.jpg'">
@@ -538,7 +541,8 @@
         } else if (metaImg && String(metaImg).startsWith('http')) {
           dishImageSrc = metaImg;
         } else if (metaImg) {
-          dishImageSrc = `${IMAGE_BASE_URL}/uploads/menu/${metaImg}`;
+          const rel = String(metaImg).includes('menu/') ? metaImg : `menu/${metaImg}`;
+          dishImageSrc = `${IMAGE_BASE_URL}/uploads/${rel}`;
         }
         const dishImgHtml = dishImageSrc ? `<img src="${dishImageSrc}" class="w-full h-44 object-cover rounded-xl mb-3" onerror="this.src='images/placeholder.jpg'">` : `<div class="w-full h-44 bg-gray-200 rounded-xl mb-3 flex items-center justify-center text-gray-500">No Image</div>`;
         card.innerHTML = `
