@@ -151,6 +151,13 @@
       // ===== Fetch restaurant details AND menu items =====
       console.log("Debug: Fetching restaurant & menu for restaurantId =", restaurantId);
 
+      // Helper function to normalize image URLs (convert HTTP to HTTPS for production)
+      function normalizeImageUrl(url) {
+        if (!url) return null;
+        // Convert http:// to https:// for mixed content prevention
+        return String(url).replace(/^http:\/\//i, 'https://');
+      }
+
       async function fetchRestaurantAndMenu(id) {
         try {
           // Fetch restaurant details from /api/restaurants/:id
@@ -165,9 +172,14 @@
           const restaurantData = await restaurantRes.json();
           console.log('Restaurant API Response:', restaurantData);
           
-          const restaurant = (restaurantData && restaurantData.success && restaurantData.data) 
+          let restaurant = (restaurantData && restaurantData.success && restaurantData.data) 
             ? restaurantData.data 
             : null;
+          
+          // Normalize image URLs to HTTPS to prevent mixed content warnings
+          if (restaurant && restaurant.image_url_full) {
+            restaurant.image_url_full = normalizeImageUrl(restaurant.image_url_full);
+          }
           
           // Fetch menu items from /api/menu/restaurant/:id
           const menuUrl = `${API_BASE_URL}/menu/restaurant/${id}`;
@@ -188,6 +200,15 @@
             items = menuData.data;
           } else if (menuData && Array.isArray(menuData.data)) {
             items = menuData.data;
+          }
+          
+          // Normalize image URLs in menu items to HTTPS
+          if (items && Array.isArray(items)) {
+            items.forEach(item => {
+              if (item.image_url_full) {
+                item.image_url_full = normalizeImageUrl(item.image_url_full);
+              }
+            });
           }
           
           return { restaurant, items };

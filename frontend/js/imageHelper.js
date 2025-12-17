@@ -4,6 +4,21 @@ const IMAGE_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com";
 const PLACEHOLDER_IMAGE = "assets/png.jpg";
 
 /**
+ * Normalize image URL to HTTPS to prevent mixed content warnings
+ * Converts http:// to https:// when running on HTTPS
+ * @param {string} url - URL to normalize
+ * @returns {string} Normalized URL
+ */
+function normalizeImageUrl(url) {
+  if (!url) return null;
+  // If page is HTTPS and URL is HTTP, convert to HTTPS to prevent mixed content warnings
+  if (window.location.protocol === 'https:' && String(url).startsWith('http://')) {
+    return String(url).replace(/^http:\/\//i, 'https://');
+  }
+  return url;
+}
+
+/**
  * Build menu image URL
  * @param {string|null} imageUrl - Filename or full URL from API
  * @param {string|null} imageUrlFull - Full URL from API (preferred)
@@ -11,10 +26,10 @@ const PLACEHOLDER_IMAGE = "assets/png.jpg";
  */
 function getMenuImageUrl(imageUrl, imageUrlFull) {
   // Priority 1: Use full URL if provided
-  if (imageUrlFull) return imageUrlFull;
+  if (imageUrlFull) return normalizeImageUrl(imageUrlFull);
   
   // Priority 2: Check if imageUrl is already a full URL
-  if (imageUrl && String(imageUrl).startsWith('http')) return imageUrl;
+  if (imageUrl && String(imageUrl).startsWith('http')) return normalizeImageUrl(imageUrl);
   
   // Priority 3: Build URL from filename
   if (imageUrl) {
@@ -37,10 +52,10 @@ function getMenuImageUrl(imageUrl, imageUrlFull) {
  */
 function getRestaurantImageUrl(imageUrl, imageUrlFull) {
   // Priority 1: Use full URL if provided
-  if (imageUrlFull) return imageUrlFull;
+  if (imageUrlFull) return normalizeImageUrl(imageUrlFull);
   
   // Priority 2: Check if imageUrl is already a full URL
-  if (imageUrl && String(imageUrl).startsWith('http')) return imageUrl;
+  if (imageUrl && String(imageUrl).startsWith('http')) return normalizeImageUrl(imageUrl);
   
   // Priority 3: Build URL from filename
   if (imageUrl) {
