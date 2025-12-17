@@ -10,6 +10,7 @@
   <script src="js/wish.js" defer></script>
   <link rel="stylesheet" href="css/animations.css">
   <script src="js/ui.js" defer></script>
+  <script src="js/imageHelper.js"></script>
   <script type="module" src="js/api.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
@@ -239,16 +240,8 @@
             document.getElementById('restaurant-desc').textContent = rest.description || 'Delicious food from Tindo partner restaurant 🍴';
             document.getElementById('restaurant-eta').textContent = `⏱️ ${rest.eta || 30} mins delivery`;
             const imgEl = document.getElementById('restaurant-image');
-            let imgSrc = 'images/placeholder.jpg';
-            if (rest.image_url_full) {
-              imgSrc = rest.image_url_full;
-            } else if (rest.image_url && String(rest.image_url).startsWith('http')) {
-              imgSrc = rest.image_url;
-            } else if (rest.image_url) {
-              imgSrc = `${IMAGE_BASE_URL}/uploads/restaurants/${rest.image_url}`;
-            }
-            imgEl.src = imgSrc;
-            imgEl.onerror = () => { imgEl.src = 'images/placeholder.jpg'; };
+            imgEl.src = getRestaurantImageUrl(rest.image_url, rest.image_url_full);
+            addImageErrorHandler(imgEl);
           } else {
             console.warn('Restaurant details missing; header will use defaults');
           }
@@ -402,8 +395,7 @@
         subtotal += item.price * item.qty;
         const node = document.createElement('div');
         node.className = 'cart-item flex items-center justify-between gap-3 p-3 rounded-lg border bg-gray-50';
-        const normalizedRel = item.image_url ? (String(item.image_url).includes('menu/') ? item.image_url : `menu/${item.image_url}`) : null;
-        const cartImgSrc = item.image_url_full || (normalizedRel ? `${IMAGE_BASE_URL}/uploads/${normalizedRel}` : 'images/placeholder.jpg');
+        const cartImgSrc = getMenuImageUrl(item.image_url, item.image_url_full);
         node.innerHTML = `
           <div class="flex items-center gap-3">
             <img src="${cartImgSrc}" class="w-14 h-14 object-cover rounded-lg border" alt="${item.name}" onerror="this.src='images/placeholder.jpg'">
@@ -533,18 +525,10 @@
         };
         // veg badge
         const vegBadge = isVegItem(dish) ? `<span class="absolute top-3 right-3 bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs">🥬 Veg</span>` : `<span class="absolute top-3 right-3 bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs">🍗 Non‑Veg</span>`;
-        let dishImageSrc = null;
         const metaImgFull = window.__menuIndex[did].image_url_full;
         const metaImg = window.__menuIndex[did].image_url;
-        if (metaImgFull) {
-          dishImageSrc = metaImgFull;
-        } else if (metaImg && String(metaImg).startsWith('http')) {
-          dishImageSrc = metaImg;
-        } else if (metaImg) {
-          const rel = String(metaImg).includes('menu/') ? metaImg : `menu/${metaImg}`;
-          dishImageSrc = `${IMAGE_BASE_URL}/uploads/${rel}`;
-        }
-        const dishImgHtml = dishImageSrc ? `<img src="${dishImageSrc}" class="w-full h-44 object-cover rounded-xl mb-3" onerror="this.src='images/placeholder.jpg'">` : `<div class="w-full h-44 bg-gray-200 rounded-xl mb-3 flex items-center justify-center text-gray-500">No Image</div>`;
+        const dishImageSrc = getMenuImageUrl(metaImg, metaImgFull);
+        const dishImgHtml = `<img src="${dishImageSrc}" class="w-full h-44 object-cover rounded-xl mb-3" onerror="this.src='images/placeholder.jpg'">`;
         card.innerHTML = `
           ${vegBadge}
           ${dishImgHtml}
