@@ -32,7 +32,7 @@
   <!-- Header -->
   <header class="bg-green-600 text-white p-4 shadow-md flex justify-between items-center navbar">
     <div class="flex items-center gap-2">
-      <img src="assets/tindo-logo.png" alt="Tindo Logo" class="w-12 h-12 rounded-full">
+      <img src="assets/logo.png" alt="Tindo Logo" class="w-12 h-12 rounded-full" onerror="this.src='assets/png.jpg'">
       <h1 class="text-2xl font-bold">
         <i data-lucide="utensils"></i> Tindo Menu
       </h1>
@@ -137,8 +137,7 @@
     lucide.createIcons();
     // Use API root (no trailing resource) so we can call multiple endpoints
     const API_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com/api";
-    const IMAGE_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com";
-    const BASE = IMAGE_BASE_URL;
+    // IMAGE_BASE_URL & PLACEHOLDER_IMAGE already defined in imageHelper.js
 
     const restaurantId = new URLSearchParams(window.location.search).get('id');
     console.log('Debug: restaurantId from URL =', restaurantId);
