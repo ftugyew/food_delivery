@@ -49,7 +49,7 @@
 
   <!-- Restaurant Banner -->
   <section class="max-w-5xl mx-auto mt-8 bg-white shadow-lg rounded-2xl overflow-hidden flex flex-col md:flex-row items-center p-6">
-    <img id="restaurant-image" src="assets/png.jpg" alt="Restaurant" class="w-full md:w-1/3 rounded-xl object-cover">
+    <img id="restaurant-image" src="https://food-delivery-backend-cw3m.onrender.com/uploads/logo.png" alt="Restaurant" class="w-full md:w-1/3 rounded-xl object-cover">
     <div class="md:ml-6 mt-4 md:mt-0">
       <h2 id="restaurant-name" class="text-3xl font-bold text-green-700 mb-2">Restaurant Name</h2>
       <p id="restaurant-desc" class="text-gray-600 mb-3">Authentic taste, hot and fresh meals served with love 💚</p>
@@ -148,35 +148,56 @@
       document.getElementById('no-dishes').textContent = "Invalid restaurant ID 😔";
       document.getElementById('no-dishes').classList.remove('hidden');
     } else {
-      // ===== Fetch restaurant info + menu =====
+      // ===== Fetch restaurant details AND menu items =====
       console.log("Debug: Fetching restaurant & menu for restaurantId =", restaurantId);
 
-      async function fetchRestaurantMenu(id) {
-        // Backend endpoint returns { success: true, data: { restaurant, items } }
-        const url = `${API_BASE_URL}/menu/restaurant/${id}`;
-        console.log('Fetching:', url);
-        
-        const res = await fetch(url);
-        if (!res.ok) {
-          throw new Error(`API Error: ${res.status} ${res.statusText}`);
+      async function fetchRestaurantAndMenu(id) {
+        try {
+          // Fetch restaurant details from /api/restaurants/:id
+          const restaurantUrl = `${API_BASE_URL}/restaurants/${id}`;
+          console.log('Fetching restaurant from:', restaurantUrl);
+          const restaurantRes = await fetch(restaurantUrl);
+          
+          if (!restaurantRes.ok) {
+            throw new Error(`Restaurant API Error: ${restaurantRes.status}`);
+          }
+          
+          const restaurantData = await restaurantRes.json();
+          console.log('Restaurant API Response:', restaurantData);
+          
+          const restaurant = (restaurantData && restaurantData.success && restaurantData.data) 
+            ? restaurantData.data 
+            : null;
+          
+          // Fetch menu items from /api/menu/restaurant/:id
+          const menuUrl = `${API_BASE_URL}/menu/restaurant/${id}`;
+          console.log('Fetching menu from:', menuUrl);
+          const menuRes = await fetch(menuUrl);
+          
+          if (!menuRes.ok) {
+            throw new Error(`Menu API Error: ${menuRes.status}`);
+          }
+          
+          const menuData = await menuRes.json();
+          console.log('Menu API Response:', menuData);
+          
+          // Backend returns { success: true, data: [...items] } for menu
+          // Note: data is an ARRAY of items, not an object
+          let items = [];
+          if (menuData && menuData.success && Array.isArray(menuData.data)) {
+            items = menuData.data;
+          } else if (menuData && Array.isArray(menuData.data)) {
+            items = menuData.data;
+          }
+          
+          return { restaurant, items };
+        } catch (err) {
+          console.error('Fetch error:', err.message);
+          throw err;
         }
-        
-        const body = await res.json();
-        console.log('API Response:', body);
-        
-        // Backend returns { success: true, data: { restaurant, items } }
-        if (body && body.success && body.data) {
-          return {
-            restaurant: body.data.restaurant || null,
-            items: body.data.items || []
-          };
-        }
-        
-        // Fallback for unexpected format
-        throw new Error('Unexpected API response format');
       }
 
-      fetchRestaurantMenu(restaurantId)
+      fetchRestaurantAndMenu(restaurantId)
         .then(({ restaurant, items }) => {
           // ===== Render restaurant banner =====
           if (restaurant) {
@@ -184,9 +205,13 @@
             document.getElementById('restaurant-desc').textContent = restaurant.description || 'Delicious food from Tindo partner restaurant 🍴';
             document.getElementById('restaurant-eta').textContent = `⏱️ ${restaurant.eta || 30} mins delivery`;
             
-            // Set restaurant image
+            // Set restaurant image - use image_url_full if available, otherwise build URL from image_url
             const imgEl = document.getElementById('restaurant-image');
-            imgEl.src = restaurant.image_url_full || getRestaurantImageUrl(restaurant.image_url, null);
+            if (restaurant.image_url_full) {
+              imgEl.src = restaurant.image_url_full;
+            } else if (restaurant.image_url) {
+              imgEl.src = `https://food-delivery-backend-cw3m.onrender.com/uploads/restaurants/${restaurant.image_url}`;
+            }
             addImageErrorHandler(imgEl);
             console.log('Restaurant loaded:', restaurant.name);
           } else {
@@ -194,23 +219,28 @@
           }
 
           // ===== Prepare menu items =====
-          console.log('Debug: Items fetched =', items);
+          console.log('Debug: Items fetched =', items, 'Count:', items.length);
           window.__restaurantDishes = items || [];
           window.__menuIndex = window.__menuIndex || {};
           
-          items.forEach((item, idx) => {
-            // Primary ID field from backend
-            const itemId = item.id || item.item_id || (idx + 1);
-            item._client_id = itemId;
-            
-            window.__menuIndex[itemId] = {
-              name: item.item_name || item.name || 'Item',
-              price: Number(item.price || 0),
-              image_url: item.image_url || '',
-              image_url_full: item.image_url_full || null,
-              restaurant_id: Number(restaurantId)
-            };
-          });
+          if (items && Array.isArray(items) && items.length > 0) {
+            items.forEach((item, idx) => {
+              // Primary ID field from backend
+              const itemId = item.id || item.item_id || (idx + 1);
+              item._client_id = itemId;
+              
+              window.__menuIndex[itemId] = {
+                name: item.item_name || item.name || 'Item',
+                price: Number(item.price || 0),
+                image_url: item.image_url || '',
+                image_url_full: item.image_url_full || null,
+                restaurant_id: Number(restaurantId)
+              };
+            });
+            console.log('Menu index populated with', items.length, 'items');
+          } else {
+            console.warn('No menu items found');
+          }
           
           renderMenu();
         })
