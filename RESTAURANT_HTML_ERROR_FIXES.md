@@ -24,21 +24,21 @@ const BASE = IMAGE_BASE_URL;
 
 ---
 
-### 2. **404 Error: tindo-logo.png Not Found** ✅ FIXED
-**Error:** `Failed to load resource: tindo-logo.png 404`
+### 2. **404 Error: tindo-logo.jpg Not Found** ✅ FIXED
+**Error:** `Failed to load resource: tindo-logo.jpg 404`
 
-**Cause:** Asset file `assets/tindo-logo.png` doesn't exist
+**Cause:** Asset file `assets/tindo-logo.jpg` doesn't exist
 
-**Solution:** Changed to `assets/logo.png` and added fallback:
+**Solution:** Changed to `assets/logo.jpg` and added fallback:
 ```html
 <!-- BEFORE: -->
-<img src="assets/tindo-logo.png" alt="Tindo Logo" class="w-12 h-12 rounded-full">
+<img src="assets/tindo-logo.jpg" alt="Tindo Logo" class="w-12 h-12 rounded-full">
 
 <!-- AFTER: -->
-<img src="assets/logo.png" alt="Tindo Logo" class="w-12 h-12 rounded-full" onerror="this.src='assets/png.jpg'">
+<img src="assets/logo.jpg" alt="Tindo Logo" class="w-12 h-12 rounded-full" onerror="this.src='assets/png.jpg'">
 ```
 
-**Impact:** ✅ Logo displays correctly (or placeholder if logo.png also missing)
+**Impact:** ✅ Logo displays correctly (or placeholder if logo.jpg also missing)
 **Result:** Header looks clean without broken image icons
 
 ---
@@ -120,7 +120,7 @@ const BASE = IMAGE_BASE_URL;
    ✅ Logo image displayed OR placeholder if missing
    ❌ Broken image icon
 2. Check Network tab (F12) → Images:
-   ✅ assets/logo.png request (may be 404, but shows fallback)
+   ✅ assets/logo.jpg request (may be 404, but shows fallback)
    ✅ assets/png.jpg loads successfully
 ```
 
@@ -162,7 +162,7 @@ const BASE = IMAGE_BASE_URL;
 ## ✅ Verification Checklist
 
 - [x] Duplicate IMAGE_BASE_URL removed
-- [x] Logo image path fixed to assets/logo.png
+- [x] Logo image path fixed to assets/logo.jpg
 - [x] Fallback added for missing logo
 - [x] No more JavaScript syntax errors
 - [x] Restaurant details should display
@@ -196,9 +196,9 @@ fetch(API_BASE_URL + '/menu/restaurant/1')
 
 **Logo still shows broken image?**
 ```
-1. Check if assets/logo.png exists in filesystem
+1. Check if assets/logo.jpg exists in filesystem
 2. If not, create it or use existing image
-3. Fallback to assets/png.jpg will show if logo.png missing
+3. Fallback to assets/png.jpg will show if logo.jpg missing
 ```
 
 ---
