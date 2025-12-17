@@ -521,15 +521,18 @@ function renderMenuItems(items) {
     return;
   }
 
-  list.innerHTML = items.map(m => `
+  list.innerHTML = items.map(m => {
+    const builtUrl = m.image_url ? `${BASE}/uploads/menu/${m.image_url}` : null;
+    const imgSrc = m.image_url_full || builtUrl;
+    return `
     <div class="card bg-green-50 p-4 rounded-xl shadow hover:shadow-lg transition-shadow">
-      ${m.image_url ? `<img src="${BASE}/uploads/${m.image_url}" class="h-32 w-full object-cover rounded mb-3" alt="${m.item_name}">` : `<div class="h-32 w-full bg-gray-200 rounded mb-3 flex items-center justify-center text-gray-500">No image</div>`}
+      ${imgSrc ? `<img src="${imgSrc}" class="h-32 w-full object-cover rounded mb-3" alt="${m.item_name}">` : `<div class="h-32 w-full bg-gray-200 rounded mb-3 flex items-center justify-center text-gray-500">No image</div>`}
       <h3 class="font-bold text-lg">${m.item_name}</h3>
       <p class="text-sm text-gray-600 truncate">${m.description || "No description"}</p>
       <p class="text-green-600 font-semibold mt-2">₹${m.price}</p>
       <p class="text-xs text-gray-500 mt-1">Restaurant: ${m.restaurant_name || m.restaurant_id}</p>
     </div>
-  `).join("");
+  `}).join("");
 }
 
 // ===== DELIVERY BOYS =====

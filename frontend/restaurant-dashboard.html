@@ -276,7 +276,9 @@ async function loadMenu() {
     }
     
     list.innerHTML = data.map(m => {
-      const imgSrc = m.image_url_full || (m.image_url ? `${BASE}/uploads/${m.image_url}` : null);
+      // Ensure menu images point to the correct uploads/menu path
+      const builtUrl = m.image_url ? `${BASE}/uploads/menu/${m.image_url}` : null;
+      const imgSrc = m.image_url_full || builtUrl;
       return `
       <div class="card bg-green-50 p-4 rounded-xl shadow flex flex-col">
         ${imgSrc ? `<img src="${imgSrc}" class="h-32 w-full object-cover rounded mb-3" alt="${m.item_name}">` : `<div class="h-32 w-full bg-gradient-to-br from-gray-200 to-gray-300 rounded mb-3 flex items-center justify-center text-gray-500 text-2xl">📷</div>`}
