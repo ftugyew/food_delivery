@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <title>All Restaurants — Tindo</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- TODO: Replace CDN Tailwind with compiled build for production deployments -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/animations.css">
   <script type="module" src="js/api.js"></script>
@@ -46,6 +47,12 @@
 import { API_BASE_URL } from "./js/config.js";
 const HOST_BASE = API_BASE_URL.replace(/\/api$/, "");
 
+// Normalize image URLs to HTTPS to avoid mixed content warnings on HTTPS deployments
+function normalizeImageUrl(url) {
+  if (!url) return null;
+  return String(url).replace(/^http:\/\//i, 'https://');
+}
+
 async function loadAllRestaurants(){
   try{
     console.log("🔄 Fetching restaurants from:", `${API_BASE_URL}/restaurants`);
@@ -86,9 +93,11 @@ function renderAll(list){
   console.log(`📋 Rendering ${list.length} restaurants`);
   container.innerHTML = list.map(r => {
     // Use centralized helper to build image URL correctly
-    const imageUrl = (typeof getRestaurantImageUrl === 'function')
-      ? getRestaurantImageUrl(r.image_url, r.image_url_full)
-      : (r.image_url_full || (r.image_url ? `${API_BASE_URL.replace('/api','')}/uploads/restaurants/${r.image_url}` : 'https://dummyimage.com/300x200/cccccc/000000?text=No+Image'));
+    const rawImageUrl = (typeof window !== 'undefined' && typeof window.getRestaurantImageUrl === 'function')
+      ? window.getRestaurantImageUrl(r.image_url, r.image_url_full)
+      : (r.image_url_full || (r.image_url ? `${HOST_BASE}/uploads/restaurants/${r.image_url}` : 'https://dummyimage.com/300x200/cccccc/000000?text=No+Image'));
+
+    const imageUrl = normalizeImageUrl(rawImageUrl) || 'assets/png.jpg';
 
     console.log(`🖼️ Restaurant "${r.name}" image:`, imageUrl);
 
