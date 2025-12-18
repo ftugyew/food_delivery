@@ -92,12 +92,18 @@ function renderAll(list){
   
   console.log(`📋 Rendering ${list.length} restaurants`);
   container.innerHTML = list.map(r => {
-    // Use direct URLs from database (no server URL prepending)
-    const rawImageUrl = (typeof window !== 'undefined' && typeof window.getRestaurantImageUrl === 'function')
-      ? window.getRestaurantImageUrl(r.image_url, r.image_url_full)
-      : (r.image_url_full || r.image_url || 'assets/png.jpg');
-
-    const imageUrl = normalizeImageUrl(rawImageUrl) || 'assets/png.jpg';
+    // Use direct image URL from API response (external URLs like Cloudinary, image2url, etc.)
+    let imageUrl = r.image_url_full || r.image_url || null;
+    
+    // Normalize to HTTPS if it's an HTTP URL
+    if (imageUrl && String(imageUrl).startsWith('http://')) {
+      imageUrl = imageUrl.replace(/^http:\/\//i, 'https://');
+    }
+    
+    // If no valid URL, use placeholder as fallback
+    if (!imageUrl) {
+      imageUrl = 'assets/png.jpg';
+    }
 
     console.log(`🖼️ Restaurant "${r.name}" image:`, imageUrl);
 
