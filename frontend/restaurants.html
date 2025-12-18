@@ -92,10 +92,10 @@ function renderAll(list){
   
   console.log(`📋 Rendering ${list.length} restaurants`);
   container.innerHTML = list.map(r => {
-    // Use centralized helper to build image URL correctly
+    // Use direct URLs from database (no server URL prepending)
     const rawImageUrl = (typeof window !== 'undefined' && typeof window.getRestaurantImageUrl === 'function')
       ? window.getRestaurantImageUrl(r.image_url, r.image_url_full)
-      : (r.image_url_full || (r.image_url ? `${HOST_BASE}${r.image_url}` : 'https://dummyimage.com/300x200/cccccc/000000?text=No+Image'));
+      : (r.image_url_full || r.image_url || 'assets/png.jpg');
 
     const imageUrl = normalizeImageUrl(rawImageUrl) || 'assets/png.jpg';
 

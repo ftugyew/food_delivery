@@ -28,17 +28,8 @@ function getMenuImageUrl(imageUrl, imageUrlFull) {
   // Priority 1: Use full URL if provided
   if (imageUrlFull) return normalizeImageUrl(imageUrlFull);
   
-  // Priority 2: Check if imageUrl is already a full URL
+  // Priority 2: Check if imageUrl is already a full URL (direct from database)
   if (imageUrl && String(imageUrl).startsWith('http')) return normalizeImageUrl(imageUrl);
-  
-  // Priority 3: Build URL from filename
-  if (imageUrl) {
-    // Ensure menu/ prefix
-    const filename = String(imageUrl).includes('menu/') 
-      ? imageUrl 
-      : `menu/${imageUrl}`;
-    return `${IMAGE_BASE_URL}/uploads/${filename}`;
-  }
   
   // Fallback: placeholder
   return PLACEHOLDER_IMAGE;
@@ -54,17 +45,8 @@ function getRestaurantImageUrl(imageUrl, imageUrlFull) {
   // Priority 1: Use full URL if provided
   if (imageUrlFull) return normalizeImageUrl(imageUrlFull);
   
-  // Priority 2: Check if imageUrl is already a full URL
+  // Priority 2: Check if imageUrl is already a full URL (direct from database)
   if (imageUrl && String(imageUrl).startsWith('http')) return normalizeImageUrl(imageUrl);
-  
-  // Priority 3: Build URL from filename
-  if (imageUrl) {
-    // Ensure restaurants/ prefix
-    const filename = String(imageUrl).includes('restaurants/') 
-      ? imageUrl 
-      : `restaurants/${imageUrl}`;
-    return `${IMAGE_BASE_URL}/uploads/${filename}`;
-  }
   
   // Fallback: placeholder
   return PLACEHOLDER_IMAGE;

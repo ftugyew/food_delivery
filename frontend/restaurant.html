@@ -226,12 +226,12 @@
             document.getElementById('restaurant-desc').textContent = restaurant.description || 'Delicious food from Tindo partner restaurant 🍴';
             document.getElementById('restaurant-eta').textContent = `⏱️ ${restaurant.eta || 30} mins delivery`;
             
-            // Set restaurant image - use image_url_full if available, otherwise build URL from image_url
+            // Set restaurant image - use direct URLs from database
             const imgEl = document.getElementById('restaurant-image');
             if (restaurant.image_url_full) {
               imgEl.src = restaurant.image_url_full;
-            } else if (restaurant.image_url) {
-              imgEl.src = `${restaurant.image_url}`;
+            } else if (restaurant.image_url && String(restaurant.image_url).startsWith('http')) {
+              imgEl.src = restaurant.image_url;
             }
             addImageErrorHandler(imgEl);
             console.log('Restaurant loaded:', restaurant.name);
