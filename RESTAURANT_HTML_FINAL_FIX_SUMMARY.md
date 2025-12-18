@@ -143,7 +143,7 @@ if (menuData && menuData.success && Array.isArray(menuData.data)) {
 if (restaurant.image_url_full) {
   imgEl.src = restaurant.image_url_full;
 } else if (restaurant.image_url) {
-  imgEl.src = `https://food-delivery-backend-cw3m.onrender.com/uploads/restaurants/${restaurant.image_url}`;
+  imgEl.src = `${restaurant.image_url}`;
 }
 ```
 

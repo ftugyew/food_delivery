@@ -239,7 +239,7 @@ Expected:
 ```
 1. Check if image_url_full is provided by API
 2. Check if uploads folder exists on server
-3. Try directly: https://food-delivery-backend-cw3m.onrender.com/uploads/restaurants/[filename]
+3. Try directly: [filename]
 4. Check onerror fallback to assets/png.jpg
 ```
 

@@ -162,7 +162,7 @@ function getRestaurantImageUrl(imageUrl, imageUrlFull) {
 ### Example 2: After Primary Normalization (restaurant.html)
 ```javascript
 // IN MEMORY (after fetch):
-restaurant.image_url_full = "https://food-delivery-backend-cw3m.onrender.com/uploads/restaurants/123.jpg"
+restaurant.image_url_full = "123.jpg"
                              ^^^^^ FIXED
 ```
 
@@ -177,7 +177,7 @@ if (imageUrlFull) return normalizeImageUrl(imageUrlFull);
 ### Example 4: Final Result in DOM
 ```html
 <!-- In browser DOM: -->
-<img src="https://food-delivery-backend-cw3m.onrender.com/uploads/restaurants/123.jpg">
+<img src="123.jpg">
      ^^^^^^ HTTPS - Browser accepts this! ✅
 ```
 

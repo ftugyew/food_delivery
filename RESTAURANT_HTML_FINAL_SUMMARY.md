@@ -163,7 +163,7 @@ Backend returns this exact format:
       "name": "Pizza Palace",
       "description": "Authentic Italian pizzas...",
       "image_url": "pizza-palace.jpg",
-      "image_url_full": "https://food-delivery-backend-cw3m.onrender.com/uploads/restaurants/pizza-palace.jpg",
+      "image_url_full": "pizza-palace.jpg",
       "eta": 25,
       "cuisine": "Italian"
     },

@@ -129,7 +129,7 @@ imgEl.src = restaurant.image_url_full || getRestaurantImageUrl(restaurant.image_
 if (restaurant.image_url_full) {
   imgEl.src = restaurant.image_url_full;
 } else if (restaurant.image_url) {
-  imgEl.src = `https://food-delivery-backend-cw3m.onrender.com/uploads/restaurants/${restaurant.image_url}`;
+  imgEl.src = `${restaurant.image_url}`;
 }
 ```
 
@@ -180,7 +180,7 @@ if (restaurant) {
   if (restaurant.image_url_full) {
     imgEl.src = restaurant.image_url_full;  // Use complete URL if provided
   } else if (restaurant.image_url) {
-    imgEl.src = `https://food-delivery-backend-cw3m.onrender.com/uploads/restaurants/${restaurant.image_url}`;
+    imgEl.src = `${restaurant.image_url}`;
   }
 }
 ```
