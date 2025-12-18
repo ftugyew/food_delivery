@@ -45,13 +45,6 @@
 
 <script type="module">
 import { API_BASE_URL } from "./js/config.js";
-const HOST_BASE = API_BASE_URL.replace(/\/api$/, "");
-
-// Normalize image URLs to HTTPS to avoid mixed content warnings on HTTPS deployments
-function normalizeImageUrl(url) {
-  if (!url) return null;
-  return String(url).replace(/^http:\/\//i, 'https://');
-}
 
 async function loadAllRestaurants(){
   try{
@@ -92,25 +85,24 @@ function renderAll(list){
   
   console.log(`📋 Rendering ${list.length} restaurants`);
   container.innerHTML = list.map(r => {
-    // Use direct image URL from API response (external URLs like Cloudinary, image2url, etc.)
-    let imageUrl = r.image_url_full || r.image_url || null;
+    // Use direct image URL from database (full external URLs only)
+    // Priority: image_url_full → image_url → placeholder
+    let imageUrl = r.image_url_full || r.image_url;
     
-    // Normalize to HTTPS if it's an HTTP URL
-    if (imageUrl && String(imageUrl).startsWith('http://')) {
-      imageUrl = imageUrl.replace(/^http:\/\//i, 'https://');
+    // Convert HTTP to HTTPS for mixed content prevention
+    if (imageUrl && imageUrl.startsWith('http://')) {
+      imageUrl = imageUrl.replace('http://', 'https://');
     }
     
-    // If no valid URL, use placeholder as fallback
-    if (!imageUrl) {
-      imageUrl = 'assets/png.jpg';
-    }
+    // Fallback to placeholder only if no URL exists
+    const finalImageUrl = imageUrl || 'assets/png.jpg';
 
-    console.log(`🖼️ Restaurant "${r.name}" image:`, imageUrl);
+    console.log(`🖼️ Restaurant "${r.name}" image:`, finalImageUrl);
 
     return `
 <div class="card rounded-2xl overflow-hidden cursor-pointer transition transform group" onclick="window.location.href='restaurant.html?id=${r.id}'">
   <div class="h-48 relative">
-    <img src="${imageUrl}"
+    <img src="${finalImageUrl}"
          class="h-full w-full object-cover"
          alt="${r.name || 'Restaurant'}"
          onerror="this.src='assets/png.jpg'" />
