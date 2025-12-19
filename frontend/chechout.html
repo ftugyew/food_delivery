@@ -83,7 +83,7 @@
         clearCart();
         showToast("Order placed: #" + res.orderId, 2500);
         // go to tracking
-        window.location.href = `tracking.html?orderId=${res.orderId}`;
+        window.location.href = `tracking-live.html?orderId=${res.orderId}`;
       } else {
         alert("Order failed: " + (res.error || "unknown"));
       }

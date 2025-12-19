@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delivery Dashboard - Live Tracking</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <!-- Mappls Advanced Maps SDK -->
+  <script src="https://apis.mappls.com/advancedmaps/api/522d3498e3667eac0fc7f509c00ac75a/map_sdk?v=3.0&layer=vector"></script>
+  <style>
+    #map { height: 300px; width: 100%; border-radius: 12px; }
+    .order-card { transition: all 0.3s ease; }
+    .order-card:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+    .tracking-active { border: 3px solid #10b981; animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+  
+  <!-- Header -->
+  <header class="bg-green-600 text-white p-4 shadow-lg">
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 class="text-2xl font-bold">🛵 Delivery Dashboard</h1>
+      <div>
+        <span id="agentName" class="mr-4 font-semibold"></span>
+        <button onclick="logout()" class="bg-red-500 px-4 py-2 rounded hover:bg-red-600">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container mx-auto p-6">
+    
+    <!-- Status Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div class="bg-white p-6 rounded-xl shadow-lg">
+        <h3 class="text-gray-600 text-sm font-semibold">Available Orders</h3>
+        <p id="availableCount" class="text-4xl font-bold text-blue-600">0</p>
+      </div>
+      <div class="bg-white p-6 rounded-xl shadow-lg">
+        <h3 class="text-gray-600 text-sm font-semibold">Active Deliveries</h3>
+        <p id="activeCount" class="text-4xl font-bold text-green-600">0</p>
+      </div>
+      <div class="bg-white p-6 rounded-xl shadow-lg">
+        <h3 class="text-gray-600 text-sm font-semibold">Tracking Status</h3>
+        <p id="trackingStatus" class="text-2xl font-bold text-purple-600">Offline</p>
+      </div>
+    </div>
+
+    <!-- Active Delivery Section -->
+    <div id="activeDeliverySection" class="mb-6 hidden">
+      <div class="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-xl shadow-xl">
+        <h2 class="text-2xl font-bold mb-4">📦 Active Delivery</h2>
+        
+        <!-- Order Info -->
+        <div class="bg-white/20 backdrop-blur-sm rounded-lg p-4 mb-4">
+          <p class="text-sm opacity-90">Order ID:</p>
+          <p id="activeOrderId" class="text-2xl font-bold">#</p>
+          <p class="text-sm opacity-90 mt-2">Customer: <span id="activeCustomerName" class="font-semibold"></span></p>
+          <p class="text-sm opacity-90">Phone: <span id="activeCustomerPhone" class="font-semibold"></span></p>
+        </div>
+
+        <!-- Map -->
+        <div id="map" class="mb-4 shadow-lg"></div>
+
+        <!-- Action Buttons -->
+        <div class="grid grid-cols-2 gap-3">
+          <button onclick="updateTrackingStatus('agent_going_to_restaurant')" 
+                  class="bg-yellow-500 text-white px-4 py-3 rounded-lg font-semibold hover:bg-yellow-600">
+            🚗 Going to Restaurant
+          </button>
+          <button onclick="updateTrackingStatus('arrived_at_restaurant')" 
+                  class="bg-orange-500 text-white px-4 py-3 rounded-lg font-semibold hover:bg-orange-600">
+            🏪 Arrived at Restaurant
+          </button>
+          <button onclick="updateTrackingStatus('picked_up')" 
+                  class="bg-blue-500 text-white px-4 py-3 rounded-lg font-semibold hover:bg-blue-600">
+            📦 Picked Up Order
+          </button>
+          <button onclick="updateTrackingStatus('in_transit')" 
+                  class="bg-purple-500 text-white px-4 py-3 rounded-lg font-semibold hover:bg-purple-600">
+            🚀 In Transit
+          </button>
+          <button onclick="updateTrackingStatus('delivered')" 
+                  class="bg-green-700 text-white px-4 py-3 rounded-lg font-semibold hover:bg-green-800 col-span-2">
+            ✅ Delivered
+          </button>
+        </div>
+
+        <button onclick="stopTracking()" class="w-full mt-3 bg-red-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-red-700">
+          ⏹️ Stop Tracking
+        </button>
+      </div>
+    </div>
+
+    <!-- Available Orders -->
+    <div class="bg-white p-6 rounded-xl shadow-lg">
+      <h2 class="text-2xl font-bold mb-4 text-gray-800">📋 Available Orders</h2>
+      <div id="ordersList" class="space-y-4">
+        <p class="text-gray-500">Loading orders...</p>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const API_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com/api";
+    const socket = io("https://food-delivery-backend-cw3m.onrender.com");
+
+    let agentId = null;
+    let currentOrderId = null;
+    let map = null;
+    let agentMarker = null;
+    let restaurantMarker = null;
+    let customerMarker = null;
+    let routeLine = null;
+    let locationInterval = null;
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+    document.addEventListener("DOMContentLoaded", async () => {
+      // Get agent from localStorage
+      const agent = JSON.parse(localStorage.getItem("agent") || "{}");
+      agentId = agent.id;
+
+      if (!agentId) {
+        alert("Please login first");
+        window.location.href = "delivery-login.html";
+        return;
+      }
+
+      document.getElementById("agentName").textContent = agent.name || "Agent";
+      
+      // Initialize map
+      initMap();
+
+      // Load orders
+      loadOrders();
+
+      // Socket connection
+      socket.on("connect", () => {
+        console.log("✅ Connected to server");
+        document.getElementById("trackingStatus").textContent = "Online";
+      });
+
+      socket.on("disconnect", () => {
+        console.log("❌ Disconnected");
+        document.getElementById("trackingStatus").textContent = "Offline";
+      });
+
+      // Listen for new orders
+      socket.on(`agent_${agentId}_order`, (data) => {
+        console.log("New order notification:", data);
+        loadOrders();
+      });
+    });
+
+    // ============================================
+    // INITIALIZE MAP
+    // ============================================
+    function initMap() {
+      if (typeof mappls === 'undefined') {
+        console.error('Mappls SDK not loaded');
+        return;
+      }
+      
+      map = new mappls.Map('map', { 
+        center: [28.6139, 77.2090], 
+        zoom: 13 
+      });
+    }
+
+    // ============================================
+    // LOAD ORDERS
+    // ============================================
+    async function loadOrders() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/delivery/${agentId}/orders`);
+        const orders = await res.json();
+
+        const availableOrders = orders.filter(o => !o.agent_id || o.agent_id === agentId);
+        const activeOrders = orders.filter(o => o.agent_id === agentId && o.status !== 'Delivered');
+
+        document.getElementById("availableCount").textContent = availableOrders.length;
+        document.getElementById("activeCount").textContent = activeOrders.length;
+
+        renderOrders(availableOrders);
+      } catch (err) {
+        console.error("Load orders error:", err);
+      }
+    }
+
+    // ============================================
+    // RENDER ORDERS
+    // ============================================
+    function renderOrders(orders) {
+      const list = document.getElementById("ordersList");
+      
+      if (!orders || orders.length === 0) {
+        list.innerHTML = '<p class="text-gray-500">No available orders</p>';
+        return;
+      }
+
+      list.innerHTML = orders.map(order => {
+        let itemsText = "N/A";
+        try {
+          const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+          if (Array.isArray(items)) {
+            itemsText = items.map(i => `${i.name || i.item_name} (x${i.quantity})`).join(", ");
+          }
+        } catch (_) {}
+
+        const isAssigned = order.agent_id === agentId;
+
+        return `
+          <div class="order-card bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg border-2 border-blue-200 ${isAssigned ? 'tracking-active' : ''}">
+            <div class="flex justify-between items-start mb-3">
+              <div>
+                <h3 class="text-lg font-bold text-gray-800">Order #${order.id}</h3>
+                <p class="text-sm text-gray-600">₹${order.total}</p>
+              </div>
+              <span class="px-3 py-1 bg-blue-500 text-white rounded-full text-xs font-semibold">
+                ${order.status}
+              </span>
+            </div>
+
+            <div class="mb-3 text-sm text-gray-700">
+              <p><strong>Items:</strong> ${itemsText}</p>
+              <p><strong>Restaurant:</strong> ${order.restaurant_name || 'N/A'}</p>
+              <p><strong>Customer:</strong> ${order.customer_name || 'Unknown'}</p>
+            </div>
+
+            ${!isAssigned ? `
+              <button onclick="acceptOrder(${order.id})" 
+                      class="w-full bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition-all">
+                ✅ Accept Order
+              </button>
+            ` : `
+              <button onclick="startTracking(${order.id})" 
+                      class="w-full bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-purple-700 transition-all">
+                📍 Start Live Tracking
+              </button>
+            `}
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ============================================
+    // ACCEPT ORDER
+    // ============================================
+    async function acceptOrder(orderId) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/tracking/orders/${orderId}/accept`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agent_id: agentId })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          alert("✅ Order accepted! You can now start tracking.");
+          loadOrders();
+        } else {
+          alert("❌ " + (data.error || "Failed to accept order"));
+        }
+      } catch (err) {
+        console.error("Accept error:", err);
+        alert("Network error. Please try again.");
+      }
+    }
+
+    // ============================================
+    // START LIVE TRACKING
+    // ============================================
+    async function startTracking(orderId) {
+      currentOrderId = orderId;
+
+      // Get order details
+      const res = await fetch(`${API_BASE_URL}/tracking/orders/${orderId}/tracking`);
+      const { data: order } = await res.json();
+
+      // Show active delivery section
+      document.getElementById("activeDeliverySection").classList.remove("hidden");
+      document.getElementById("activeOrderId").textContent = `#${order.order_id || order.id}`;
+      document.getElementById("activeCustomerName").textContent = order.customer_name || 'Unknown';
+      document.getElementById("activeCustomerPhone").textContent = order.customer_phone || 'N/A';
+
+      // Join tracking via socket
+      socket.emit("agent_start_tracking", { agent_id: agentId, order_id: orderId });
+
+      socket.on("tracking_started", () => {
+        document.getElementById("trackingStatus").textContent = "Tracking Active";
+        startLocationSharing();
+      });
+
+      // Update map with restaurant and customer locations
+      if (order.restaurant_lat && order.restaurant_lng) {
+        if (restaurantMarker) {
+          try { restaurantMarker.remove(); } catch(_) {}
+        }
+        restaurantMarker = new mappls.Marker({
+          map: map,
+          position: [order.restaurant_lat, order.restaurant_lng],
+          popupHtml: `🏪 ${order.restaurant_name}`,
+          icon: 'https://apis.mappls.com/map_v3/1.png'
+        });
+      }
+
+      if (order.delivery_lat && order.delivery_lng) {
+        if (customerMarker) {
+          try { customerMarker.remove(); } catch(_) {}
+        }
+        customerMarker = new mappls.Marker({
+          map: map,
+          position: [order.delivery_lat, order.delivery_lng],
+          popupHtml: `🏠 Customer`,
+          icon: 'https://apis.mappls.com/map_v3/2.png'
+        });
+      }
+
+      // Fit map bounds
+      if (restaurantMarker && customerMarker) {
+        try {
+          const bounds = [
+            [order.restaurant_lat, order.restaurant_lng],
+            [order.delivery_lat, order.delivery_lng]
+          ];
+          map.fitBounds(bounds);
+        } catch(e) {
+          console.warn("Fit bounds error:", e);
+        }
+      }
+    }
+
+    // ============================================
+    // START LOCATION SHARING
+    // ============================================
+    function startLocationSharing() {
+      if (!navigator.geolocation) {
+        alert("Geolocation not supported");
+        return;
+      }
+
+      // Send location every 5 seconds
+      locationInterval = setInterval(() => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude, accuracy, speed, heading } = position.coords;
+
+            // Send to server
+            socket.emit("agent_location_update", {
+              agent_id: agentId,
+              order_id: currentOrderId,
+              latitude,
+              longitude,
+              accuracy,
+              speed,
+              heading
+            });
+
+            // Update agent marker on map
+            updateAgentMarker(latitude, longitude);
+
+            console.log(`📍 Location sent: ${latitude}, ${longitude}`);
+          },
+          (error) => {
+            console.error("Location error:", error);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 0
+          }
+        );
+      }, 5000);
+    }
+
+    // ============================================
+    // UPDATE AGENT MARKER
+    // ============================================
+    function updateAgentMarker(lat, lng) {
+      if (!agentMarker) {
+        agentMarker = new mappls.Marker({
+          map: map,
+          position: [lat, lng],
+          popupHtml: "🛵 You",
+          icon: 'https://apis.mappls.com/map_v3/3.png'
+        });
+      } else {
+        try {
+          agentMarker.setPosition([lat, lng]);
+        } catch(e) {
+          console.warn("Set position error:", e);
+        }
+      }
+
+      // Draw route line (green)
+      if (restaurantMarker && !routeLine) {
+        try {
+          routeLine = new mappls.Polyline({
+            map: map,
+            paths: [[lat, lng], restaurantMarker.getPosition()],
+            strokeColor: '#10b981',
+            strokeWeight: 4,
+            strokeOpacity: 0.7
+          });
+        } catch(e) {
+          console.warn("Polyline error:", e);
+        }
+      } else if (routeLine && restaurantMarker) {
+        try {
+          routeLine.setPaths([[lat, lng], restaurantMarker.getPosition()]);
+        } catch(e) {
+          console.warn("Update polyline error:", e);
+        }
+      }
+    }
+
+    // ============================================
+    // UPDATE TRACKING STATUS
+    // ============================================
+    async function updateTrackingStatus(status) {
+      if (!currentOrderId) return;
+
+      try {
+        navigator.geolocation.getCurrentPosition(async (position) => {
+          const { latitude, longitude } = position.coords;
+
+          const res = await fetch(`${API_BASE_URL}/tracking/orders/${currentOrderId}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tracking_status: status,
+              agent_id: agentId,
+              latitude,
+              longitude
+            })
+          });
+
+          const data = await res.json();
+
+          if (data.success) {
+            alert(`✅ Status updated: ${status}`);
+
+            // If delivered, stop tracking
+            if (status === 'delivered') {
+              stopTracking();
+            }
+
+            // Update route for phase 2 (picked_up = go to customer)
+            if (status === 'picked_up' && customerMarker && routeLine) {
+              try {
+                routeLine.setPaths([agentMarker.getPosition(), customerMarker.getPosition()]);
+              } catch(e) {
+                console.warn("Update route error:", e);
+              }
+            }
+          } else {
+            alert("❌ Failed to update status");
+          }
+        });
+      } catch (err) {
+        console.error("Status update error:", err);
+      }
+    }
+
+    // ============================================
+    // STOP TRACKING
+    // ============================================
+    function stopTracking() {
+      if (locationInterval) {
+        clearInterval(locationInterval);
+        locationInterval = null;
+      }
+
+      socket.emit("agent_stop_tracking", { agent_id: agentId, order_id: currentOrderId });
+
+      document.getElementById("activeDeliverySection").classList.add("hidden");
+      document.getElementById("trackingStatus").textContent = "Online";
+
+      if (agentMarker) {
+        try { agentMarker.remove(); } catch(_) {}
+        agentMarker = null;
+      }
+      if (restaurantMarker) {
+        try { restaurantMarker.remove(); } catch(_) {}
+        restaurantMarker = null;
+      }
+      if (customerMarker) {
+        try { customerMarker.remove(); } catch(_) {}
+        customerMarker = null;
+      }
+      if (routeLine) {
+        try { routeLine.remove(); } catch(_) {}
+        routeLine = null;
+      }
+
+      currentOrderId = null;
+      loadOrders();
+    }
+
+    // ============================================
+    // LOGOUT
+    // ============================================
+    function logout() {
+      stopTracking();
+      localStorage.removeItem("agent");
+      window.location.href = "delivery-login.html";
+    }
+  </script>
+
+</body>
+</html>

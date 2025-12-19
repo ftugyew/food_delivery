@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Order Tracking</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <!-- Mappls Advanced Maps SDK -->
+  <script src="https://apis.mappls.com/advancedmaps/api/522d3498e3667eac0fc7f509c00ac75a/map_sdk?v=3.0&layer=vector"></script>
+  <style>
+    #trackingMap { height: 400px; width: 100%; border-radius: 12px; }
+    .status-badge {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .7; }
+    }
+    .chat-container { max-height: 300px; overflow-y: auto; }
+    .chat-message { margin-bottom: 10px; padding: 8px 12px; border-radius: 8px; max-width: 70%; }
+    .chat-user { background: #e5e7eb; align-self: flex-start; }
+    .chat-agent { background: #10b981; color: white; align-self: flex-end; margin-left: auto; }
+  </style>
+</head>
+<body class="bg-gray-50">
+
+  <!-- Header -->
+  <header class="bg-green-600 text-white p-4 shadow-lg">
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 class="text-2xl font-bold">📦 Live Order Tracking</h1>
+      <a href="index.html" class="bg-white text-green-600 px-4 py-2 rounded font-semibold hover:bg-gray-100">
+        🏠 Home
+      </a>
+    </div>
+  </header>
+
+  <div class="container mx-auto p-6 max-w-4xl">
+
+    <!-- Order Status Card -->
+    <div class="bg-white rounded-xl shadow-xl p-6 mb-6">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h2 class="text-3xl font-bold text-gray-800">Order <span id="displayOrderId">#</span></h2>
+          <p class="text-sm text-gray-600 mt-1">Order ID: <span id="orderIdCode" class="font-mono"></span></p>
+        </div>
+        <span id="statusBadge" class="status-badge px-4 py-2 bg-blue-500 text-white rounded-full text-sm font-semibold">
+          Waiting
+        </span>
+      </div>
+
+      <!-- Timeline -->
+      <div class="relative">
+        <div class="flex justify-between mb-2 text-xs font-semibold text-gray-600">
+          <span>Order Placed</span>
+          <span>Agent Assigned</span>
+          <span>Picked Up</span>
+          <span>Delivered</span>
+        </div>
+        <div class="relative h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div id="progressBar" class="h-full bg-green-500 transition-all duration-500" style="width: 25%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Map -->
+    <div class="bg-white rounded-xl shadow-xl p-6 mb-6">
+      <h3 class="text-xl font-bold mb-4 text-gray-800">📍 Live Location</h3>
+      <div id="trackingMap" class="shadow-lg"></div>
+      
+      <div class="mt-4 grid grid-cols-3 gap-3 text-center text-sm">
+        <div class="bg-red-50 p-3 rounded-lg">
+          <div class="text-red-600 font-bold text-lg">🏪</div>
+          <div class="text-gray-600 mt-1">Restaurant</div>
+        </div>
+        <div class="bg-green-50 p-3 rounded-lg">
+          <div class="text-green-600 font-bold text-lg">🛵</div>
+          <div class="text-gray-600 mt-1">Delivery Agent</div>
+        </div>
+        <div class="bg-blue-50 p-3 rounded-lg">
+          <div class="text-blue-600 font-bold text-lg">🏠</div>
+          <div class="text-gray-600 mt-1">Your Location</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delivery Agent Details -->
+    <div id="agentDetails" class="bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl shadow-xl p-6 mb-6 hidden">
+      <h3 class="text-xl font-bold mb-4">🛵 Delivery Agent</h3>
+      <div class="bg-white/20 backdrop-blur-sm rounded-lg p-4">
+        <div class="flex items-center mb-3">
+          <img id="agentPhoto" src="https://ui-avatars.com/api/?name=Agent&background=10b981&color=fff" 
+               class="w-16 h-16 rounded-full mr-4 border-4 border-white shadow-lg" />
+          <div>
+            <p class="font-bold text-lg" id="agentName">-</p>
+            <p class="text-sm opacity-90" id="agentPhone">-</p>
+            <p class="text-xs opacity-75" id="agentVehicle">-</p>
+          </div>
+        </div>
+
+        <div class="flex gap-2 mt-4">
+          <button onclick="callAgent()" class="flex-1 bg-white text-green-600 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 transition-all">
+            📞 Call Agent
+          </button>
+          <button onclick="toggleChat()" class="flex-1 bg-yellow-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-yellow-600 transition-all">
+            💬 Chat
+          </button>
+        </div>
+      </div>
+
+      <!-- ETA -->
+      <div class="mt-4 bg-yellow-500 text-white p-3 rounded-lg text-center">
+        <p class="text-sm font-semibold">Estimated Arrival</p>
+        <p id="etaDisplay" class="text-2xl font-bold">Calculating...</p>
+      </div>
+    </div>
+
+    <!-- Chat Box -->
+    <div id="chatBox" class="bg-white rounded-xl shadow-xl p-6 hidden">
+      <h3 class="text-xl font-bold mb-4 text-gray-800">💬 Chat with Delivery Agent</h3>
+      
+      <div id="chatMessages" class="chat-container border-2 border-gray-200 rounded-lg p-4 mb-4 flex flex-col">
+        <p class="text-gray-500 text-center text-sm">No messages yet</p>
+      </div>
+
+      <div class="flex gap-2">
+        <input type="text" id="chatInput" placeholder="Type your message..." 
+               class="flex-1 border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-green-500"
+               onkeypress="handleChatKeypress(event)" />
+        <button onclick="sendMessage()" class="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700">
+          Send
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const API_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com/api";
+    const socket = io("https://food-delivery-backend-cw3m.onrender.com");
+
+    let orderId = null;
+    let userId = null;
+    let map = null;
+    let agentMarker = null;
+    let restaurantMarker = null;
+    let customerMarker = null;
+    let routeLine = null;
+    let orderData = null;
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+    document.addEventListener("DOMContentLoaded", async () => {
+      // Get order ID from URL
+      const params = new URLSearchParams(window.location.search);
+      orderId = params.get("orderId");
+
+      if (!orderId) {
+        alert("No order ID provided");
+        window.location.href = "index.html";
+        return;
+      }
+
+      // Get user from localStorage
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      userId = user.id;
+
+      // Initialize map
+      initMap();
+
+      // Load order tracking data
+      await loadTrackingData();
+
+      // Join tracking room via socket
+      socket.emit("user_join_tracking", { user_id: userId, order_id: orderId });
+
+      // Socket listeners
+      socket.on("tracking_joined", () => {
+        console.log("✅ Joined tracking room");
+      });
+
+      socket.on("live_location", (data) => {
+        console.log("📍 Live location update:", data);
+        updateAgentLocation(data.latitude, data.longitude);
+        updateETA(data);
+      });
+
+      socket.on(`order_${orderId}_update`, (data) => {
+        console.log("🔔 Order update:", data);
+        if (data.type === "agent_assigned") {
+          showAgentDetails(data.agent);
+        } else if (data.type === "status_change") {
+          updateOrderStatus(data.tracking_status);
+        }
+      });
+
+      socket.on("chat_message", (message) => {
+        displayChatMessage(message);
+      });
+
+      // Reload tracking data every 30 seconds
+      setInterval(loadTrackingData, 30000);
+    });
+
+    // ============================================
+    // INITIALIZE MAP
+    // ============================================
+    function initMap() {
+      if (typeof mappls === 'undefined') {
+        console.error('Mappls SDK not loaded');
+        return;
+      }
+      
+      map = new mappls.Map('trackingMap', { 
+        center: [28.6139, 77.2090], 
+        zoom: 13 
+      });
+    }
+
+    // ============================================
+    // LOAD TRACKING DATA
+    // ============================================
+    async function loadTrackingData() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/tracking/orders/${orderId}/tracking`);
+        const { success, data } = await res.json();
+
+        if (success && data) {
+          orderData = data;
+
+          // Update order info
+          document.getElementById("displayOrderId").textContent = `#${data.id}`;
+          document.getElementById("orderIdCode").textContent = data.order_id || data.id;
+          document.getElementById("statusBadge").textContent = data.tracking_status || data.status;
+
+          // Update progress bar
+          updateProgressBar(data.tracking_status);
+
+          // Add restaurant marker
+          if (data.restaurant_lat && data.restaurant_lng) {
+            if (!restaurantMarker) {
+              restaurantMarker = new mappls.Marker({
+                map: map,
+                position: [data.restaurant_lat, data.restaurant_lng],
+                popupHtml: `🏪 ${data.restaurant_name}`,
+                icon: 'https://apis.mappls.com/map_v3/1.png'
+              });
+            }
+          }
+
+          // Add customer marker
+          if (data.delivery_lat && data.delivery_lng) {
+            if (!customerMarker) {
+              customerMarker = new mappls.Marker({
+                map: map,
+                position: [data.delivery_lat, data.delivery_lng],
+                popupHtml: "🏠 Your Location",
+                icon: 'https://apis.mappls.com/map_v3/2.png'
+              });
+            }
+          }
+
+          // Show agent details if assigned
+          if (data.agent_id && data.agent_name) {
+            showAgentDetails({
+              id: data.agent_id,
+              name: data.agent_name,
+              phone: data.agent_phone,
+              vehicle_type: data.vehicle_type,
+              vehicle_number: data.vehicle_number,
+              profile_image: data.profile_image
+            });
+
+            // Add agent marker if location available
+            if (data.agent_current_lat && data.agent_current_lng) {
+              updateAgentLocation(data.agent_current_lat, data.agent_current_lng);
+            }
+          }
+
+          // Fit map bounds
+          if (restaurantMarker && customerMarker) {
+            try {
+              const bounds = [
+                restaurantMarker.getPosition(),
+                customerMarker.getPosition()
+              ];
+              if (agentMarker) {
+                bounds.push(agentMarker.getPosition());
+              }
+              map.fitBounds(bounds);
+            } catch(e) {
+              console.warn("Fit bounds error:", e);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Load tracking error:", err);
+      }
+    }
+
+    // ============================================
+    // UPDATE AGENT LOCATION
+    // ============================================
+    function updateAgentLocation(lat, lng) {
+      if (!agentMarker) {
+        agentMarker = new mappls.Marker({
+          map: map,
+          position: [lat, lng],
+          popupHtml: "🛵 Delivery Agent",
+          icon: 'https://apis.mappls.com/map_v3/3.png'
+        });
+      } else {
+        try {
+          agentMarker.setPosition([lat, lng]);
+        } catch(e) {
+          console.warn("Set position error:", e);
+        }
+      }
+
+      // Draw green route line
+      updateRouteLine();
+    }
+
+    // ============================================
+    // UPDATE ROUTE LINE
+    // ============================================
+    function updateRouteLine() {
+      if (!agentMarker) return;
+
+      let targetMarker = restaurantMarker;
+      
+      // After picked up, route goes to customer
+      if (orderData && (orderData.tracking_status === 'picked_up' || orderData.tracking_status === 'in_transit')) {
+        targetMarker = customerMarker;
+      }
+
+      if (targetMarker) {
+        try {
+          if (!routeLine) {
+            routeLine = new mappls.Polyline({
+              map: map,
+              paths: [agentMarker.getPosition(), targetMarker.getPosition()],
+              strokeColor: '#10b981',
+              strokeWeight: 4,
+              strokeOpacity: 0.7,
+              strokeDasharray: '10, 10'
+            });
+          } else {
+            routeLine.setPaths([agentMarker.getPosition(), targetMarker.getPosition()]);
+          }
+        } catch(e) {
+          console.warn("Route line error:", e);
+        }
+      }
+    }
+
+    // ============================================
+    // SHOW AGENT DETAILS
+    // ============================================
+    function showAgentDetails(agent) {
+      document.getElementById("agentDetails").classList.remove("hidden");
+      document.getElementById("agentName").textContent = agent.name || "Delivery Agent";
+      document.getElementById("agentPhone").textContent = agent.phone || "N/A";
+      document.getElementById("agentVehicle").textContent = 
+        `${agent.vehicle_type || 'Vehicle'} ${agent.vehicle_number ? '- ' + agent.vehicle_number : ''}`;
+
+      if (agent.profile_image) {
+        document.getElementById("agentPhoto").src = agent.profile_image;
+      } else {
+        document.getElementById("agentPhoto").src = 
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(agent.name)}&background=10b981&color=fff`;
+      }
+    }
+
+    // ============================================
+    // UPDATE ORDER STATUS
+    // ============================================
+    function updateOrderStatus(status) {
+      document.getElementById("statusBadge").textContent = status;
+      updateProgressBar(status);
+    }
+
+    // ============================================
+    // UPDATE PROGRESS BAR
+    // ============================================
+    function updateProgressBar(status) {
+      const progressMap = {
+        'waiting': 0,
+        'agent_assigned': 25,
+        'agent_going_to_restaurant': 40,
+        'arrived_at_restaurant': 50,
+        'picked_up': 70,
+        'in_transit': 85,
+        'delivered': 100
+      };
+
+      const progress = progressMap[status] || 0;
+      document.getElementById("progressBar").style.width = `${progress}%`;
+    }
+
+    // ============================================
+    // UPDATE ETA
+    // ============================================
+    function updateETA(locationData) {
+      if (!agentMarker || !customerMarker) return;
+
+      try {
+        // Simple distance calculation (Haversine)
+        const agentPos = agentMarker.getPosition();
+        const customerPos = customerMarker.getPosition();
+        
+        // Mappls returns position as array [lat, lng]
+        const agentLat = Array.isArray(agentPos) ? agentPos[0] : agentPos.lat;
+        const agentLng = Array.isArray(agentPos) ? agentPos[1] : agentPos.lng;
+        const customerLat = Array.isArray(customerPos) ? customerPos[0] : customerPos.lat;
+        const customerLng = Array.isArray(customerPos) ? customerPos[1] : customerPos.lng;
+        
+        const R = 6371; // Earth radius in km
+        const dLat = toRad(customerLat - agentLat);
+        const dLon = toRad(customerLng - agentLng);
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(toRad(agentLat)) * Math.cos(toRad(customerLat)) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distance = R * c;
+
+        // Assume 30 km/h average speed
+        const minutes = Math.round((distance / 30) * 60);
+        
+        document.getElementById("etaDisplay").textContent = 
+          minutes > 0 ? `${minutes} mins` : "Arriving soon";
+      } catch(e) {
+        console.warn("ETA calculation error:", e);
+      }
+    }
+
+    function toRad(deg) {
+      return deg * (Math.PI / 180);
+    }
+
+    // ============================================
+    // CALL AGENT
+    // ============================================
+    function callAgent() {
+      const phone = document.getElementById("agentPhone").textContent;
+      if (phone && phone !== "N/A") {
+        window.location.href = `tel:${phone}`;
+      } else {
+        alert("Agent phone not available");
+      }
+    }
+
+    // ============================================
+    // TOGGLE CHAT
+    // ============================================
+    function toggleChat() {
+      const chatBox = document.getElementById("chatBox");
+      chatBox.classList.toggle("hidden");
+      
+      if (!chatBox.classList.contains("hidden")) {
+        loadChatMessages();
+      }
+    }
+
+    // ============================================
+    // LOAD CHAT MESSAGES
+    // ============================================
+    async function loadChatMessages() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/tracking/orders/${orderId}/chat`);
+        const { messages } = await res.json();
+
+        const container = document.getElementById("chatMessages");
+        
+        if (!messages || messages.length === 0) {
+          container.innerHTML = '<p class="text-gray-500 text-center text-sm">No messages yet</p>';
+          return;
+        }
+
+        container.innerHTML = messages.map(msg => `
+          <div class="chat-message ${msg.sender_type === 'user' ? 'chat-user' : 'chat-agent'}">
+            <p class="text-sm font-semibold">${msg.sender_name || msg.sender_type}</p>
+            <p>${msg.message}</p>
+            <p class="text-xs opacity-75 mt-1">${new Date(msg.created_at).toLocaleTimeString()}</p>
+          </div>
+        `).join('');
+
+        container.scrollTop = container.scrollHeight;
+      } catch (err) {
+        console.error("Load chat error:", err);
+      }
+    }
+
+    // ============================================
+    // SEND MESSAGE
+    // ============================================
+    async function sendMessage() {
+      const input = document.getElementById("chatInput");
+      const message = input.value.trim();
+
+      if (!message) return;
+
+      try {
+        socket.emit("send_chat_message", {
+          order_id: orderId,
+          sender_id: userId,
+          sender_type: "user",
+          message
+        });
+
+        input.value = "";
+      } catch (err) {
+        console.error("Send message error:", err);
+      }
+    }
+
+    function handleChatKeypress(event) {
+      if (event.key === 'Enter') {
+        sendMessage();
+      }
+    }
+
+    // ============================================
+    // DISPLAY CHAT MESSAGE
+    // ============================================
+    function displayChatMessage(message) {
+      const container = document.getElementById("chatMessages");
+      
+      if (container.querySelector('.text-gray-500')) {
+        container.innerHTML = '';
+      }
+
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `chat-message ${message.sender_type === 'user' ? 'chat-user' : 'chat-agent'}`;
+      msgDiv.innerHTML = `
+        <p class="text-sm font-semibold">${message.sender_type === 'user' ? 'You' : 'Agent'}</p>
+        <p>${message.message}</p>
+        <p class="text-xs opacity-75 mt-1">${new Date().toLocaleTimeString()}</p>
+      `;
+
+      container.appendChild(msgDiv);
+      container.scrollTop = container.scrollHeight;
+    }
+  </script>
+
+</body>
+</html>

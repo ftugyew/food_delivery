@@ -120,21 +120,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     // Handle both response formats: {success, order_id} or {message, order}
     if (data.success || data.order || data.message) {
-      const orderId = data.order_id || data.order?.id || data.order?.order_id;
-      const orderCode = data.order_code || data.order?.order_id || `TND${orderId}`;
+      const orderIdString = data.order_id || data.order?.order_id;
+      const orderId = data.order?.id || orderIdString;
       
-      if (orderId) {
-        document.getElementById("orderId").textContent = orderId;
-        document.getElementById("orderCode").textContent = orderCode;
+      if (orderIdString || orderId) {
+        // Display the 12-digit order_id as the main identifier
+        document.getElementById("orderId").textContent = orderIdString || orderId;
+        document.getElementById("orderCode").textContent = orderIdString || `TND${orderId}`;
         document.getElementById("paymentType").textContent = orderData.payment_type || orderData.payment_method || 'Cash';
         document.getElementById("eta").textContent = orderData.estimated_delivery || '30-35 mins';
         
-        // persist for tracking page
-        localStorage.setItem('last_order_id', String(orderId));
+        // persist for tracking page (use DB id for tracking)
+        const trackingId = data.order?.id || orderId;
+        localStorage.setItem('last_order_id', String(trackingId));
+        localStorage.setItem('last_order_code', String(orderIdString || orderId));
         localStorage.setItem('last_order_restaurant', String(orderData.restaurant_id));
         
         const track = document.getElementById('trackBtn');
-        track.href = `tracking.html?orderId=${encodeURIComponent(orderId)}`;
+        track.href = `tracking-live.html?orderId=${encodeURIComponent(trackingId)}`;
         
         localStorage.removeItem("currentOrder");
         localStorage.removeItem("cartItems");
