@@ -25,8 +25,15 @@
   <header class="bg-green-600 text-white p-4 shadow-lg">
     <div class="container mx-auto flex justify-between items-center">
       <h1 class="text-2xl font-bold">🛵 Delivery Dashboard</h1>
-      <div>
-        <span id="agentName" class="mr-4 font-semibold"></span>
+      <div class="flex items-center gap-4">
+        <span id="agentName" class="font-semibold"></span>
+        <!-- Online/Offline Toggle -->
+        <label class="flex items-center cursor-pointer bg-white/20 px-3 py-2 rounded-lg">
+          <input type="checkbox" id="onlineToggle" class="mr-2" checked />
+          <span class="text-sm font-semibold">
+            <span id="onlineStatus">🟢 Online</span>
+          </span>
+        </label>
         <button onclick="logout()" class="bg-red-500 px-4 py-2 rounded hover:bg-red-600">Logout</button>
       </div>
     </div>
@@ -97,8 +104,14 @@
     </div>
 
     <!-- Available Orders -->
-    <div class="bg-white p-6 rounded-xl shadow-lg">
+    <div id="ordersSection" class="bg-white p-6 rounded-xl shadow-lg">
       <h2 class="text-2xl font-bold mb-4 text-gray-800">📋 Available Orders</h2>
+      <div id="offlineMessage" class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4 hidden">
+        <p class="text-yellow-800">
+          <strong>⚠️ You are Offline</strong><br/>
+          Turn on the Online toggle to receive and accept orders.
+        </p>
+      </div>
       <div id="ordersList" class="space-y-4">
         <p class="text-gray-500">Loading orders...</p>
       </div>
@@ -118,6 +131,7 @@
     let customerMarker = null;
     let routeLine = null;
     let locationInterval = null;
+    let isOnline = true;
 
     // ============================================
     // INITIALIZATION
@@ -138,7 +152,25 @@
       // Initialize map
       initMap();
 
-      // Load orders
+      // Online/Offline Toggle
+      const onlineToggle = document.getElementById("onlineToggle");
+      onlineToggle.addEventListener("change", (e) => {
+        isOnline = e.target.checked;
+        const status = document.getElementById("onlineStatus");
+        const offlineMsg = document.getElementById("offlineMessage");
+        
+        if (isOnline) {
+          status.textContent = "🟢 Online";
+          offlineMsg.classList.add("hidden");
+          loadOrders();
+        } else {
+          status.textContent = "🔴 Offline";
+          offlineMsg.classList.remove("hidden");
+          document.getElementById("ordersList").innerHTML = '<p class="text-gray-500 italic">You are offline. Turn on the toggle to see available orders.</p>';
+        }
+      });
+      
+      // Load orders immediately
       loadOrders();
 
       // Socket connection
@@ -178,6 +210,11 @@
     // LOAD ORDERS
     // ============================================
     async function loadOrders() {
+      // Don't load orders if offline
+      if (!isOnline) {
+        return;
+      }
+
       try {
         const res = await fetch(`${API_BASE_URL}/delivery/${agentId}/orders`);
         const orders = await res.json();
