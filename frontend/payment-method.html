@@ -171,13 +171,19 @@ async function confirmPayment() {
   const orderData = {
     user_id,
     restaurant_id,
-    items: cartItems,
-    total_price: totalAmount,
-    address: [selectedAddress.house, selectedAddress.street, selectedAddress.city, selectedAddress.state, selectedAddress.pincode]
+    items: cartItems.map(item => ({
+      menu_item_id: item.id || item.menu_item_id,
+      name: item.name || item.item_name,
+      quantity: item.qty || item.quantity || 1,
+      price: item.price
+    })),
+    total: totalAmount,
+    delivery_address: [selectedAddress.house, selectedAddress.street, selectedAddress.city, selectedAddress.state, selectedAddress.pincode]
               .filter(Boolean).join(", "),
-    lat: selectedAddress.latitude,
-    lng: selectedAddress.longitude,
-    payment_method: paymentMethod
+    delivery_lat: selectedAddress.latitude,
+    delivery_lng: selectedAddress.longitude,
+    payment_type: paymentMethod,
+    estimated_delivery: '30-35 mins'
   };
 
   localStorage.setItem("currentOrder", JSON.stringify(orderData));
