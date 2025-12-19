@@ -96,12 +96,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
+  console.log("Placing order with data:", orderData);
+
   try {
-    const res = await fetch(`${API_BASE_URL}/api/orders`, {
+    // FIXED: Removed duplicate /api (already in API_BASE_URL)
+    const res = await fetch(`${API_BASE_URL}/orders`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(orderData)
     });
+
+    console.log("Response status:", res.status, res.statusText);
+
+    // Check if response is OK before parsing JSON
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("API Error Response:", errorText);
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
 
     const data = await res.json();
     console.log("Order API response:", data);
@@ -128,14 +140,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         localStorage.removeItem("cartItems");
         localStorage.removeItem("tindo_cart");
       } else {
+        console.error("No order ID in response:", data);
         alert("❌ Failed to retrieve order ID");
       }
     } else {
+      console.error("Unexpected response format:", data);
       alert("❌ Failed to save order: " + (data.error || "Unknown error"));
     }
   } catch (err) {
-    alert("Server offline. Try later");
-    console.error(err);
+    console.error("Order placement error:", err);
+    alert("❌ Failed to place order. Please try again.\nError: " + err.message);
   }
 });
 
