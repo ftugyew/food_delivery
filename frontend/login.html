@@ -220,11 +220,11 @@
         return;
       }
 
-      // Handle pending restaurant status
+      // Handle pending restaurant or agent status
       if (json.status === "pending") {
         spoon.classList.add("sad");
         setTimeout(() => spoon.classList.remove("sad"), 800);
-        alert("Your restaurant is waiting for admin approval");
+        alert(json.message || "Your account is waiting for admin approval");
         return;
       }
 
@@ -233,6 +233,14 @@
         spoon.classList.add("sad");
         setTimeout(() => spoon.classList.remove("sad"), 800);
         alert("Your restaurant application was rejected");
+        return;
+      }
+
+      // If backend indicates failure (e.g., agent not active yet), stop here
+      if (json.success === false) {
+        spoon.classList.add("sad");
+        setTimeout(() => spoon.classList.remove("sad"), 800);
+        alert(json.message || "Login not allowed yet. Please contact admin.");
         return;
       }
 
@@ -318,6 +326,12 @@
         }
         if (json.status === "rejected") {
           alert("Your restaurant application was rejected");
+          return;
+        }
+
+        // Block if backend indicates failure (e.g., agent inactive)
+        if (json.success === false) {
+          alert(json.message || "Login not allowed yet. Please contact admin.");
           return;
         }
         
