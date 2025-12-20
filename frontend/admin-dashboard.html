@@ -341,20 +341,35 @@ async function apiCall(endpoint, options = {}) {
       headers: { ...defaultHeaders, ...options.headers }
     });
 
-    // Try to parse JSON, fallback to empty object
+    // Read response text first
+    const text = await response.text();
     let data = {};
-    try {
-      const text = await response.text();
-      if (text) data = JSON.parse(text);
-    } catch (jsonErr) {
-      console.warn(`⚠️ Failed to parse JSON from ${endpoint}:`, jsonErr);
+    
+    // Try to parse JSON only if we have text and it looks like JSON
+    if (text && text.trim()) {
+      try {
+        data = JSON.parse(text);
+      } catch (jsonErr) {
+        // If parse fails and response is not OK, it's likely an HTML error page
+        if (!response.ok) {
+          console.error(`❌ Non-JSON error response [${response.status}] ${endpoint}`);
+          return { success: false, error: `Server error: ${response.status}` };
+        }
+        console.warn(`⚠️ Failed to parse JSON from ${endpoint}:`, text.substring(0, 100));
+      }
     }
 
     if (!response.ok) {
       console.error(`❌ API Error [${response.status}] ${endpoint}:`, data);
-      throw new Error(data.error || data.message || `HTTP ${response.status}`);
+      return { success: false, error: data.error || data.message || `HTTP ${response.status}` };
     }
 
+    // Normalize response: if data is already { success, data }, return as-is
+    // Otherwise wrap it
+    if (data && typeof data === 'object' && 'success' in data) {
+      return data;
+    }
+    
     return { success: true, data, status: response.status };
   } catch (err) {
     console.error(`❌ Network error on ${endpoint}:`, err);
@@ -1537,7 +1552,15 @@ async function loadRestaurantsForMap() {
       return;
     }
 
-    const arr = res.data || [];
+    // Handle both array responses and {data: []} responses
+    let arr = [];
+    if (Array.isArray(res.data)) {
+      arr = res.data;
+    } else if (res.data && Array.isArray(res.data.data)) {
+      arr = res.data.data;
+    } else if (Array.isArray(res)) {
+      arr = res;
+    }
     restaurantsById = new Map(arr.map(r => [Number(r.id), r]));
 
     // Setup restaurant ID input
