@@ -1,12 +1,13 @@
 // js/imageHelper.js - Centralized image URL handling
 
-const IMAGE_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com";
+// REMOVED: const IMAGE_BASE_URL - Images should use direct URLs from database only
 const PLACEHOLDER_IMAGE = "assets/png.jpg";
 
 /**
  * Normalize image URL to HTTPS to prevent mixed content warnings
  * Converts http:// to https:// when running on HTTPS
- * @param {string} url - URL to normalize
+ * IMPORTANT: This function does NOT construct URLs. It only normalizes existing full URLs.
+ * @param {string} url - Full URL to normalize
  * @returns {string} Normalized URL
  */
 function normalizeImageUrl(url) {

@@ -602,8 +602,8 @@ function renderMenuItems(items) {
   }
 
   list.innerHTML = items.map(m => {
-    const builtUrl = m.image_url ? `${BASE}/uploads/menu/${m.image_url}` : null;
-    const imgSrc = m.image_url_full || builtUrl;
+    // Use direct image URL from database (no BASE prefix)
+    const imgSrc = (m.image_url && m.image_url.startsWith('http')) ? m.image_url : null;
     return `
     <div class="card bg-green-50 p-4 rounded-xl shadow hover:shadow-lg transition-shadow">
       ${imgSrc ? `<img src="${imgSrc}" class="h-32 w-full object-cover rounded mb-3" alt="${m.item_name}">` : `<div class="h-32 w-full bg-gray-200 rounded mb-3 flex items-center justify-center text-gray-500">No image</div>`}
@@ -825,7 +825,8 @@ function renderFeaturedRestaurants(restaurants) {
   }
 
   list.innerHTML = restaurants.map(fr => {
-    const img = fr.image_url ? `${BASE}/uploads/${fr.image_url}` : "https://via.placeholder.com/120?text=No+Image";
+    // Use direct image URL from database (no BASE prefix)
+    const img = (fr.image_url && fr.image_url.startsWith('http')) ? fr.image_url : "https://via.placeholder.com/120?text=No+Image";
     return `
     <div class="card bg-green-50 p-4 rounded-xl shadow flex justify-between items-center">
       <div class="flex items-center gap-4">
@@ -940,7 +941,8 @@ function renderTopRestaurants(restaurants) {
   }
 
   list.innerHTML = restaurants.map(tr => {
-    const img = tr.image_url ? `${BASE}/uploads/${tr.image_url}` : "https://via.placeholder.com/120?text=No+Image";
+    // Use direct image URL from database (no BASE prefix)
+    const img = (tr.image_url && tr.image_url.startsWith('http')) ? tr.image_url : "https://via.placeholder.com/120?text=No+Image";
     return `
     <div class="card bg-blue-50 p-4 rounded-xl shadow flex justify-between items-center">
       <div class="flex items-center gap-4">
@@ -1050,16 +1052,19 @@ async function loadBanners() {
     return;
   }
 
-  list.innerHTML = res.data.map(b => `
+  list.innerHTML = res.data.map(b => {
+    const bannerImg = (b.image_url && b.image_url.startsWith('http')) ? b.image_url : 'https://via.placeholder.com/800x200?text=Banner';
+    return `
     <div class="relative border rounded-xl overflow-hidden group hover:shadow-lg transition-shadow">
-      <img src="${BASE}/uploads/${b.image_url}" class="w-full h-40 object-cover" alt="Banner #${b.id}">
+      <img src="${bannerImg}" class="w-full h-40 object-cover" alt="Banner #${b.id}"
+           onerror="this.src='https://via.placeholder.com/800x200?text=Banner'">
       <button onclick="removeBanner(${b.id})" title="Remove" class="absolute top-2 right-2 bg-white/90 text-gray-700 hover:bg-white rounded-full w-8 h-8 flex items-center justify-center shadow hover:shadow-lg transition-all">×</button>
       <div class="absolute bottom-0 left-0 right-0 text-xs text-gray-600 bg-white/80 px-2 py-1 flex justify-between">
         <span>#${b.id}</span>
         <span>${b.is_active ? "✓ Active" : "Inactive"}</span>
       </div>
     </div>
-  `).join("");
+  `;}).join("");
 
   console.log(`✅ Loaded ${res.data.length} banners`);
 }

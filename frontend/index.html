@@ -485,11 +485,14 @@ function displayTopRestaurants(top) {
     const badge = r && Number.isFinite(Number(r.position)) && Number(r.position) > 0
       ? `<div class=\"absolute top-3 left-3 bg-blue-400 text-blue-900 px-2 py-1 rounded-full text-xs font-bold z-10\">⭐ Top #${r.position}</div>`
       : '';
+    // Use direct image URL from database (no BASE prefix)
+    const topRestImage = (r.image_url && r.image_url.startsWith('http')) ? r.image_url : '/assets/placeholder.jpg';
     return `
-    <div class=\"card hover-lift rounded-2xl overflow-hidden cursor-pointer transition transform group relative reveal\" onclick=\"openRestaurant(${r.restaurant_id || r.id})\" role=\"button\" tabindex=\"0\">\n      ${badge}
+    <div class="card hover-lift rounded-2xl overflow-hidden cursor-pointer transition transform group relative reveal" onclick="openRestaurant(${r.restaurant_id || r.id})" role="button" tabindex="0">\n      ${badge}
       <div class="h-48">
-        <img src="${BASE}/uploads/${r.image_url || 'default.jpg'}"
-             class="h-full w-full object-cover" alt="${r.name}">
+        <img src="${topRestImage}"
+             class="h-full w-full object-cover" alt="${r.name}"
+             onerror="this.src='/assets/placeholder.jpg'">
       </div>
       <div class="p-6">
         <h3 class="text-xl font-bold text-gray-800 mb-2">${r.name}</h3>
@@ -515,7 +518,8 @@ function displayFeaturedRestaurants(featured) {
     const badge = r && Number.isFinite(Number(r.position)) && Number(r.position) > 0
       ? `<div class="absolute top-3 left-3 bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full text-xs font-bold z-10">⭐ Featured #${r.position}</div>`
       : '';
-    const imageUrl = r.image_url ? `${BASE}/uploads/${r.image_url}` : '/assets/placeholder.jpg';
+    // Use direct image URL from database (no BASE prefix)
+    const imageUrl = (r.image_url && r.image_url.startsWith('http')) ? r.image_url : '/assets/placeholder.jpg';
     return `
     <div class="card hover-lift rounded-2xl overflow-hidden cursor-pointer transition transform group relative reveal" onclick="openRestaurant(${r.restaurant_id || r.id})" role="button" tabindex="0">
       ${badge}
@@ -546,7 +550,8 @@ function displayRestaurants(restaurants) {
   }
 
   container.innerHTML = items.map(r => {
-    const imageUrl = r.image_url ? `${BASE}/uploads/${r.image_url}` : '/assets/placeholder.jpg';
+    // Use direct image URL from database (no BASE prefix)
+    const imageUrl = (r.image_url && r.image_url.startsWith('http')) ? r.image_url : '/assets/placeholder.jpg';
     return `
     <div class="card hover-lift rounded-2xl overflow-hidden cursor-pointer transition transform group reveal" onclick="openRestaurant(${r.id})" data-ripple>
       <div class="h-48 relative">
@@ -619,9 +624,10 @@ async function showRestaurantDishes(restaurantId) {
           ${dishes.map(dish => `
             <div class="border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow">
               <div class="flex gap-4">
-                ${dish.image_url ? `
-                  <img src="${BASE}/uploads/${dish.image_url}" 
-                       class="w-20 h-20 object-cover rounded-lg" alt="${dish.item_name}">
+                ${dish.image_url && dish.image_url.startsWith('http') ? `
+                  <img src="${dish.image_url}" 
+                       class="w-20 h-20 object-cover rounded-lg" alt="${dish.item_name}"
+                       onerror="this.src='/assets/placeholder.jpg'">
                 ` : `
                   <div class="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center text-gray-400">
                     🍽️
@@ -839,21 +845,24 @@ async function fetchCategoryItems(category) {
       return;
     }
 
-    container.innerHTML = items.map(item => `
+    container.innerHTML = items.map(item => {
+      const itemImage = (item.image_url && item.image_url.startsWith('http')) ? item.image_url : '/assets/placeholder.jpg';
+      return `
       <div class="card hover-lift rounded-2xl overflow-hidden cursor-pointer transition transform group" data-ripple>
         <div class="h-48 relative">
-          <img src="${BASE}/uploads/${item.image_url || 'default.jpg'}" class="h-full w-full object-cover" alt="${item.item_name}">
+          <img src="${itemImage}" class="h-full w-full object-cover" alt="${item.item_name}"
+               onerror="this.src='/assets/placeholder.jpg'">
         </div>
         <div class="p-6">
           <h3 class="text-xl font-bold text-gray-800 mb-2">${item.item_name}</h3>
           <p class="text-gray-600 mb-3">${item.description || 'Delicious food'}</p>
           <div class="flex items-center justify-between">
             <span class="text-green-600 font-semibold">₹${item.price}</span>
-            <button class="btn btn-primary btn-sm" data-wish data-ripple onclick="addToCart('${item.item_name}', ${item.price}, '${item.image_url || ''}')">Add to Cart</button>
+            <button class="btn btn-primary btn-sm" data-wish data-ripple onclick="addToCart('${item.item_name}', ${item.price}, '${itemImage}')">Add to Cart</button>
           </div>
         </div>
       </div>
-    `).join("");
+    `;}).join("");
 
     // Scroll to the restaurants section
     document.getElementById("restaurants").scrollIntoView({ behavior: "smooth" });
@@ -907,7 +916,8 @@ async function initPopupBanner(){
     const bannerEl = document.getElementById('promoBanner');
     const closeBtn = document.getElementById('closeBannerBtn');
     if(!imgEl || !bannerEl || !closeBtn) return;
-    imgEl.src = `${BASE}/uploads/${banner.image_url}`;
+    // Use direct image URL from database (no BASE prefix)
+    imgEl.src = (banner.image_url && banner.image_url.startsWith('http')) ? banner.image_url : '/assets/placeholder.jpg';
     // show inline banner
     bannerEl.classList.remove('hidden');
     closeBtn.onclick = () => {

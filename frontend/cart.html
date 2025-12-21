@@ -94,9 +94,11 @@
 
         const cartItem = document.createElement('div');
         cartItem.className = 'flex items-center justify-between p-4 bg-gray-50 rounded-xl shadow-sm hover:shadow-md transition';
+        const cartItemImage = (item.image_url && item.image_url.startsWith('http')) ? item.image_url : '/assets/placeholder.jpg';
         cartItem.innerHTML = `
           <div class="flex items-center gap-4">
-            <img src="${BASE}/uploads/${item.image_url}" alt="${item.name}" class="w-16 h-16 rounded-xl object-cover border">
+            <img src="${cartItemImage}" alt="${item.name}" class="w-16 h-16 rounded-xl object-cover border"
+                 onerror="this.src='/assets/placeholder.jpg'">
             <div>
               <h3 class="text-lg font-semibold text-green-700">${item.name}</h3>
               <p class="text-gray-500 text-sm">₹${item.price} × ${item.qty}</p>
