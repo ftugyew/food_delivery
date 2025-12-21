@@ -85,16 +85,17 @@ function renderAll(list){
   
   console.log(`📋 Rendering ${list.length} restaurants`);
   container.innerHTML = list.map(r => {
-    // Use direct image URL from database (full external URLs only)
+    // ⚠️ IMPORTANT: Use DIRECT image URL from database - NO API/Render URL prefix
+    // The database already contains full Cloudinary URLs - use them as-is
     // Priority: image_url_full → image_url → placeholder
     let imageUrl = r.image_url_full || r.image_url;
     
-    // Convert HTTP to HTTPS for mixed content prevention
+    // Only convert HTTP to HTTPS for mixed content prevention (no other modifications)
     if (imageUrl && imageUrl.startsWith('http://')) {
       imageUrl = imageUrl.replace('http://', 'https://');
     }
     
-    // Use placeholder only if no valid URL exists
+    // Use placeholder only if no valid URL exists in database
     const finalImageUrl = imageUrl || 'assets/png.jpg';
 
     console.log(`🖼️ Restaurant "${r.name}" image:`, finalImageUrl);
