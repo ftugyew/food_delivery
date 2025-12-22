@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Delivery Dashboard - Live Tracking</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/auth-guard.js" defer></script>
+  <script src="js/agent-location-tracker.js" defer></script>
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <!-- Mappls Advanced Maps SDK -->
   <script src="https://apis.mappls.com/advancedmaps/api/522d3498e3667eac0fc7f509c00ac75a/map_sdk?v=3.0&layer=vector"></script>
@@ -137,13 +139,13 @@
     // INITIALIZATION
     // ============================================
     document.addEventListener("DOMContentLoaded", async () => {
-      // Get agent from localStorage
-      const agent = JSON.parse(localStorage.getItem("agent") || "{}");
+      // Get agent from localStorage (stored as 'user' after login)
+      const agent = JSON.parse(localStorage.getItem("user") || "{}");
       agentId = agent.id;
 
       if (!agentId) {
         alert("Please login first");
-        window.location.href = "delivery-login.html";
+        window.location.href = "login.html";
         return;
       }
 
@@ -189,6 +191,14 @@
         console.log("New order notification:", data);
         loadOrders();
       });
+
+      // Listen for new available orders (broadcast to all agents)
+      socket.on("newAvailableOrder", (data) => {
+        console.log("📢 New available order for all agents:", data);
+        if (isOnline) {
+          loadOrders();
+        }
+      });
     });
 
     // ============================================
@@ -216,7 +226,26 @@
       }
 
       try {
-        const res = await fetch(`${API_BASE_URL}/delivery/${agentId}/orders`);
+        const token = localStorage.getItem("token");
+        if (!token) {
+          alert("Session expired. Please login again");
+          window.location.href = "login.html";
+          return;
+        }
+        
+        const res = await fetch(`${API_BASE_URL}/delivery/${agentId}/orders`, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          }
+        });
+        
+        if (!res.ok) {
+          const error = await res.json();
+          alert("Error loading orders: " + (error.message || "Server error"));
+          return;
+        }
+        
         const orders = await res.json();
 
         const availableOrders = orders.filter(o => !o.agent_id || o.agent_id === agentId);
@@ -228,6 +257,7 @@
         renderOrders(availableOrders);
       } catch (err) {
         console.error("Load orders error:", err);
+        alert("Error loading orders: " + err.message);
       }
     }
 
@@ -292,23 +322,42 @@
     // ============================================
     async function acceptOrder(orderId) {
       try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          alert("Session expired. Please login again");
+          window.location.href = "login.html";
+          return;
+        }
+        
         const res = await fetch(`${API_BASE_URL}/tracking/orders/${orderId}/accept`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify({ agent_id: agentId })
         });
 
         const data = await res.json();
 
-        if (data.success) {
+        if (data.success || res.ok) {
           alert("✅ Order accepted! You can now start tracking.");
+          
+          // Emit socket event to notify tracking page that agent accepted the order
+          socket.emit("orderAccepted", {
+            orderId: orderId,
+            agentId: agentId,
+            agentName: document.getElementById("agentName").textContent,
+            timestamp: new Date().toISOString()
+          });
+          
           loadOrders();
         } else {
           alert("❌ " + (data.error || "Failed to accept order"));
         }
       } catch (err) {
         console.error("Accept error:", err);
-        alert("Network error. Please try again.");
+        alert("Error accepting order: " + err.message);
       }
     }
 
@@ -316,62 +365,86 @@
     // START LIVE TRACKING
     // ============================================
     async function startTracking(orderId) {
-      currentOrderId = orderId;
-
-      // Get order details
-      const res = await fetch(`${API_BASE_URL}/tracking/orders/${orderId}/tracking`);
-      const { data: order } = await res.json();
-
-      // Show active delivery section
-      document.getElementById("activeDeliverySection").classList.remove("hidden");
-      document.getElementById("activeOrderId").textContent = `#${order.order_id || order.id}`;
-      document.getElementById("activeCustomerName").textContent = order.customer_name || 'Unknown';
-      document.getElementById("activeCustomerPhone").textContent = order.customer_phone || 'N/A';
-
-      // Join tracking via socket
-      socket.emit("agent_start_tracking", { agent_id: agentId, order_id: orderId });
-
-      socket.on("tracking_started", () => {
-        document.getElementById("trackingStatus").textContent = "Tracking Active";
-        startLocationSharing();
-      });
-
-      // Update map with restaurant and customer locations
-      if (order.restaurant_lat && order.restaurant_lng) {
-        if (restaurantMarker) {
-          try { restaurantMarker.remove(); } catch(_) {}
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          alert("Session expired. Please login again");
+          window.location.href = "login.html";
+          return;
         }
-        restaurantMarker = new mappls.Marker({
-          map: map,
-          position: [order.restaurant_lat, order.restaurant_lng],
-          popupHtml: `🏪 ${order.restaurant_name}`,
-          icon: 'https://apis.mappls.com/map_v3/1.png'
+        
+        currentOrderId = orderId;
+
+        // Get order details
+        const res = await fetch(`${API_BASE_URL}/tracking/orders/${orderId}/tracking`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
-      }
-
-      if (order.delivery_lat && order.delivery_lng) {
-        if (customerMarker) {
-          try { customerMarker.remove(); } catch(_) {}
+        
+        if (!res.ok) {
+          const error = await res.json();
+          alert("Error: " + (error.message || "Failed to load order details"));
+          return;
         }
-        customerMarker = new mappls.Marker({
-          map: map,
-          position: [order.delivery_lat, order.delivery_lng],
-          popupHtml: `🏠 Customer`,
-          icon: 'https://apis.mappls.com/map_v3/2.png'
+        
+        const { data: order } = await res.json();
+
+        // Show active delivery section
+        document.getElementById("activeDeliverySection").classList.remove("hidden");
+        document.getElementById("activeOrderId").textContent = `#${order.order_id || order.id}`;
+        document.getElementById("activeCustomerName").textContent = order.customer_name || 'Unknown';
+        document.getElementById("activeCustomerPhone").textContent = order.customer_phone || 'N/A';
+
+        // Join tracking via socket
+        socket.emit("agent_start_tracking", { agent_id: agentId, order_id: orderId });
+
+        socket.on("tracking_started", () => {
+          document.getElementById("trackingStatus").textContent = "Tracking Active";
+          startLocationSharing();
         });
-      }
 
-      // Fit map bounds
-      if (restaurantMarker && customerMarker) {
-        try {
-          const bounds = [
-            [order.restaurant_lat, order.restaurant_lng],
-            [order.delivery_lat, order.delivery_lng]
-          ];
-          map.fitBounds(bounds);
-        } catch(e) {
-          console.warn("Fit bounds error:", e);
+        // Update map with restaurant and customer locations
+        if (order.restaurant_lat && order.restaurant_lng) {
+          if (restaurantMarker) {
+            try { restaurantMarker.remove(); } catch(_) {}
+          }
+          restaurantMarker = new mappls.Marker({
+            map: map,
+            position: [order.restaurant_lat, order.restaurant_lng],
+            popupHtml: `🏪 ${order.restaurant_name}`,
+            icon: 'https://apis.mappls.com/map_v3/1.png'
+          });
         }
+
+        if (order.delivery_lat && order.delivery_lng) {
+          if (customerMarker) {
+            try { customerMarker.remove(); } catch(_) {}
+          }
+          customerMarker = new mappls.Marker({
+            map: map,
+            position: [order.delivery_lat, order.delivery_lng],
+            popupHtml: `🏠 Customer`,
+            icon: 'https://apis.mappls.com/map_v3/2.png'
+          });
+        }
+
+        // Fit map bounds
+        if (restaurantMarker && customerMarker) {
+          try {
+            const bounds = [
+              [order.restaurant_lat, order.restaurant_lng],
+              [order.delivery_lat, order.delivery_lng]
+            ];
+            map.fitBounds(bounds);
+          } catch(e) {
+            console.warn("Fit bounds error:", e);
+          }
+        }
+      } catch (err) {
+        console.error("Start tracking error:", err);
+        alert("Error starting tracking: " + err.message);
       }
     }
 

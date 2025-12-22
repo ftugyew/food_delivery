@@ -6,6 +6,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/animations.css">
+  <script src="js/auth-guard.js" defer></script>
+  <script src="js/location-service.js" defer></script>
   <script src="js/scripts.js" defer></script>
 </head>
 <body class="bg-green-50 page-transition">
@@ -23,6 +25,14 @@
         <input id="addr_name" placeholder="Full name" class="w-full border rounded px-3 py-2 mt-2"/>
         <input id="addr_phone" placeholder="Phone" class="w-full border rounded px-3 py-2 mt-2"/>
         <textarea id="addr_line" placeholder="Address" class="w-full border rounded px-3 py-2 mt-2"></textarea>
+        
+        <div class="mt-4 p-3 bg-blue-50 rounded border border-blue-200">
+          <label class="flex items-center">
+            <input type="checkbox" id="useCurrentLocation" class="mr-2" />
+            <span class="text-sm">📍 Use my current location</span>
+          </label>
+          <p id="locationStatus" class="text-xs text-gray-600 mt-2"></p>
+        </div>
       </div>
 
       <div class="card">
@@ -36,13 +46,36 @@
         </div>
 
         <div class="mt-4">
-          <button class="btn btn-green" onclick="placeOrder()">Place Order</button>
+          <button id="placeOrderBtn" class="btn btn-green" onclick="placeOrder()">Place Order</button>
         </div>
       </div>
     </div>
   </main>
 
   <script>
+    let userLocation = null;
+
+    // Handle location checkbox
+    document.getElementById("useCurrentLocation").addEventListener("change", async (e) => {
+      const statusEl = document.getElementById("locationStatus");
+      
+      if (e.target.checked) {
+        statusEl.textContent = "📍 Requesting location...";
+        try {
+          userLocation = await locationService.getLocation();
+          statusEl.textContent = `✅ Location captured: ${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)}`;
+          console.log("📍 User location:", userLocation);
+        } catch (error) {
+          statusEl.textContent = `❌ Failed to get location: ${error.message}`;
+          document.getElementById("useCurrentLocation").checked = false;
+          userLocation = null;
+        }
+      } else {
+        userLocation = null;
+        statusEl.textContent = "";
+      }
+    });
+
     function renderCheckout(){
       const cart = getCart();
       const node = document.getElementById("checkoutItems");
@@ -75,17 +108,43 @@
         restaurant_id: cart[0].restaurant_id,
         items: cart.map(i=>({ menu_item_id:i.menu_item_id, quantity:i.quantity, price:i.price })),
         total_amount: totals.total,
-        address
+        address,
+        // Include user location if captured
+        delivery_lat: userLocation ? userLocation.latitude : null,
+        delivery_lng: userLocation ? userLocation.longitude : null
       };
 
-      const res = await placeOrderOnServer(payload);
-      if(res && res.orderId){
-        clearCart();
-        showToast("Order placed: #" + res.orderId, 2500);
-        // go to tracking
-        window.location.href = `tracking-live.html?orderId=${res.orderId}`;
-      } else {
-        alert("Order failed: " + (res.error || "unknown"));
+      // Show loading state
+      const btn = document.getElementById("placeOrderBtn");
+      const originalText = btn.innerText;
+      btn.disabled = true;
+      btn.innerText = "Placing order...";
+
+      try {
+        const res = await placeOrderOnServer(payload);
+        if(res && res.orderId){
+          clearCart();
+          showToast("Order placed: #" + res.orderId, 2500);
+          // Store location in localStorage for tracking
+          if (userLocation) {
+            localStorage.setItem('userDeliveryLocation', JSON.stringify({
+              lat: userLocation.latitude,
+              lng: userLocation.longitude,
+              timestamp: new Date().toISOString()
+            }));
+          }
+          // Go to tracking
+          window.location.href = `tracking-live.html?orderId=${res.orderId}`;
+        } else {
+          alert("Order failed: " + (res.error || "unknown"));
+          btn.disabled = false;
+          btn.innerText = originalText;
+        }
+      } catch (error) {
+        console.error("Order error:", error);
+        alert("Order failed: " + error.message);
+        btn.disabled = false;
+        btn.innerText = originalText;
       }
     }
 
