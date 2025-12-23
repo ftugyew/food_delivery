@@ -187,10 +187,23 @@
         updateETA(data);
       });
 
+      // Listen for agent location updates for this specific order
+      socket.on(`order_${orderId}_location`, (data) => {
+        console.log("📍 Agent location update for order:", data);
+        updateAgentLocation(data.latitude, data.longitude);
+        updateETA(data);
+      });
+
       socket.on(`order_${orderId}_update`, (data) => {
         console.log("🔔 Order update:", data);
         if (data.type === "agent_assigned") {
           showAgentDetails(data.agent);
+          // Show notification
+          const notification = document.createElement("div");
+          notification.className = "fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-pulse";
+          notification.textContent = `✅ Agent ${data.agent_name || 'assigned'} has been assigned to your order!`;
+          document.body.appendChild(notification);
+          setTimeout(() => notification.remove(), 5000);
         } else if (data.type === "status_change") {
           updateOrderStatus(data.tracking_status);
         }
@@ -213,13 +226,54 @@
         }
       });
 
+      // Listen for general agent location updates
+      socket.on("agent_location_update", (data) => {
+        if (orderData && data.order_id == orderId) {
+          console.log("📍 Agent location update:", data);
+          updateAgentLocation(data.latitude, data.longitude);
+          updateETA(data);
+        }
+      });
+
       socket.on("chat_message", (message) => {
         displayChatMessage(message);
       });
 
-      // Reload tracking data every 30 seconds
+      // Listen for agent location broadcasts
+      socket.on("agent_location_broadcast", (data) => {
+        if (orderData && data.agent_id && orderData.agent_id == data.agent_id) {
+          console.log("📍 Agent location broadcast received:", data);
+          updateAgentLocation(data.latitude, data.longitude);
+          updateETA(data);
+        }
+      });
+
+      // Reload tracking data every 30 seconds as backup
       setInterval(loadTrackingData, 30000);
+      
+      // Poll agent location every 5 seconds for real-time updates
+      setInterval(pollAgentLocation, 5000);
     });
+
+    // ============================================
+    // POLL AGENT LOCATION
+    // ============================================
+    async function pollAgentLocation() {
+      if (!orderId || !orderData || !orderData.agent_id) return;
+      
+      try {
+        const res = await fetch(`${API_BASE_URL}/delivery/location/${orderId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.lat && data.lng) {
+            updateAgentLocation(data.lat, data.lng);
+            updateETA({ latitude: data.lat, longitude: data.lng });
+          }
+        }
+      } catch (err) {
+        console.error("Poll location error:", err);
+      }
+    }
 
     // ============================================
     // INITIALIZE MAP

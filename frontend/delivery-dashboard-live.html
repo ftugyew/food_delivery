@@ -134,6 +134,9 @@
     let routeLine = null;
     let locationInterval = null;
     let isOnline = true;
+    let locationPermissionGranted = false;
+    let agentCurrentLat = null;
+    let agentCurrentLng = null;
 
     // ============================================
     // INITIALIZATION
@@ -151,8 +154,272 @@
 
       document.getElementById("agentName").textContent = agent.name || "Agent";
       
-      // Initialize map
+      // ✅ STEP 1: Request Location Permission FIRST
+      await requestLocationPermission();
+      // ✅ STEP 1: Request Location Permission FIRST
+      await requestLocationPermission();
+      
+      // Initialize map with agent's current location
       initMap();
+
+      // Online/Offline Toggle
+      const onlineToggle = document.getElementById("onlineToggle");
+      onlineToggle.addEventListener("change", (e) => {
+        isOnline = e.target.checked;
+        const status = document.getElementById("onlineStatus");
+        const offlineMsg = document.getElementById("offlineMessage");
+        
+        if (isOnline) {
+          status.textContent = "🟢 Online";
+          offlineMsg.classList.add("hidden");
+          if (locationPermissionGranted) {
+            loadOrders();
+          }
+        } else {
+          status.textContent = "🔴 Offline";
+          offlineMsg.classList.remove("hidden");
+          document.getElementById("ordersList").innerHTML = '<p class="text-gray-500 italic">You are offline. Turn on the toggle to see available orders.</p>';
+        }
+      });
+      
+      // Load orders immediately if location permission granted
+      if (locationPermissionGranted) {
+        loadOrders();
+      }
+
+      // Socket connection
+      socket.on("connect", () => {
+        console.log("✅ Connected to server");
+        document.getElementById("trackingStatus").textContent = "Online";
+        // Join agent-specific room
+        socket.emit("join", { type: "agent", id: agentId });
+      });
+
+      socket.on("disconnect", () => {
+        console.log("❌ Disconnected");
+        document.getElementById("trackingStatus").textContent = "Offline";
+      });
+
+      // Listen for new orders assigned to this agent
+      socket.on(`agent_${agentId}_order`, (data) => {
+        console.log("🔔 New order notification:", data);
+        showNotification(`New order assigned: #${data.order.id || data.order_id}`);
+        if (isOnline && locationPermissionGranted) {
+          loadOrders();
+        }
+      });
+
+      // Listen for new available orders (broadcast to all agents)
+      socket.on("newAvailableOrder", (data) => {
+        console.log("📢 New available order for all agents:", data);
+        showNotification(`New order available: #${data.orderId || data.id}`);
+        if (isOnline && locationPermissionGranted) {
+          loadOrders();
+        }
+      });
+
+      // Listen for order updates
+      socket.on("orderUpdate", (data) => {
+        console.log("🔄 Order update:", data);
+        if (isOnline && locationPermissionGranted) {
+          loadOrders();
+        }
+      });
+
+      // Listen for any restaurant order notifications
+      socket.on("newOrder", (data) => {
+        console.log("📋 New order in system:", data);
+        if (isOnline && locationPermissionGranted) {
+          setTimeout(() => loadOrders(), 1000);
+        }
+      });
+    });
+
+    // ============================================
+    // REQUEST LOCATION PERMISSION
+    // ============================================
+    async function requestLocationPermission() {
+      if (!navigator.geolocation) {
+        alert("❌ Geolocation is not supported by your browser. You cannot accept orders without location services.");
+        locationPermissionGranted = false;
+        document.getElementById("trackingStatus").textContent = "Location Not Supported";
+        return;
+      }
+
+      return new Promise((resolve) => {
+        // Show a friendly message
+        const permissionModal = confirm(
+          "🛵 Location Access Required\n\n" +
+          "To accept and deliver orders, we need access to your location.\n\n" +
+          "Click OK to grant permission."
+        );
+
+        if (!permissionModal) {
+          alert("⚠️ You must allow location access to accept orders. Please enable location in your browser settings.");
+          locationPermissionGranted = false;
+          document.getElementById("trackingStatus").textContent = "Location Denied";
+          document.getElementById("offlineMessage").classList.remove("hidden");
+          document.getElementById("offlineMessage").innerHTML = `
+            <p class="text-red-800">
+              <strong>⚠️ Location Permission Required</strong><br/>
+              You must grant location permission to accept and deliver orders. Please enable location in your browser settings and refresh the page.
+            </p>
+          `;
+          resolve(false);
+          return;
+        }
+
+        // Request location
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            agentCurrentLat = position.coords.latitude;
+            agentCurrentLng = position.coords.longitude;
+            locationPermissionGranted = true;
+            document.getElementById("trackingStatus").textContent = "Location Active";
+            console.log("✅ Location permission granted:", agentCurrentLat, agentCurrentLng);
+            
+            // Start continuous location tracking
+            startContinuousLocationTracking();
+            
+            resolve(true);
+          },
+          (error) => {
+            console.error("❌ Location error:", error);
+            let errorMsg = "Unable to get your location.";
+            
+            switch (error.code) {
+              case error.PERMISSION_DENIED:
+                errorMsg = "Location permission denied. Please enable location in your browser settings.";
+                break;
+              case error.POSITION_UNAVAILABLE:
+                errorMsg = "Location information is unavailable. Please check your device settings.";
+                break;
+              case error.TIMEOUT:
+                errorMsg = "Location request timed out. Please try again.";
+                break;
+            }
+            
+            alert("⚠️ " + errorMsg);
+            locationPermissionGranted = false;
+            document.getElementById("trackingStatus").textContent = "Location Error";
+            document.getElementById("offlineMessage").classList.remove("hidden");
+            document.getElementById("offlineMessage").innerHTML = `
+              <p class="text-red-800">
+                <strong>⚠️ Location Error</strong><br/>
+                ${errorMsg}
+              </p>
+            `;
+            resolve(false);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+          }
+        );
+      });
+    }
+
+    // ============================================
+    // START CONTINUOUS LOCATION TRACKING
+    // ============================================
+    function startContinuousLocationTracking() {
+      // Update location every 5 seconds
+      setInterval(() => {
+        if (navigator.geolocation && locationPermissionGranted) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              agentCurrentLat = position.coords.latitude;
+              agentCurrentLng = position.coords.longitude;
+              
+              // Update agent position in map if visible
+              if (agentMarker && map) {
+                try {
+                  agentMarker.setPosition([agentCurrentLat, agentCurrentLng]);
+                  // Recenter map on agent location
+                  map.setCenter([agentCurrentLat, agentCurrentLng]);
+                } catch(e) {
+                  console.warn("Failed to update agent marker:", e);
+                }
+              }
+              
+              // Update location in database via API
+              try {
+                const token = localStorage.getItem("token");
+                await fetch(`${API_BASE_URL}/delivery/update-location`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                  },
+                  body: JSON.stringify({
+                    agent_id: agentId,
+                    lat: agentCurrentLat,
+                    lng: agentCurrentLng
+                  })
+                });
+                console.log(`📍 Location updated in DB: ${agentCurrentLat}, ${agentCurrentLng}`);
+              } catch(err) {
+                console.error("Failed to update location in DB:", err);
+              }
+              
+              // Also emit via socket for real-time updates
+              socket.emit("agent_location_broadcast", {
+                agent_id: agentId,
+                latitude: agentCurrentLat,
+                longitude: agentCurrentLng,
+                timestamp: new Date().toISOString()
+              });
+            },
+            (error) => {
+              console.error("Location tracking error:", error);
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 5000,
+              maximumAge: 0
+            }
+          );
+        }
+      }, 5000);
+    }
+
+    // ============================================
+    // SHOW NOTIFICATION
+    // ============================================
+    function showNotification(message) {
+      // Create toast notification
+      const toast = document.createElement('div');
+      toast.className = 'fixed bottom-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-xl z-50 animate-bounce';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.remove();
+      }, 3000);
+      
+      // Play sound if available
+      try {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiToIGWm98OScTQwMUKXh77BeFQU2jdXxxnMpBSl+y/DaijkIFmS38OqcTgwOUKzn8bVlGAc6ktjyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8bllGgc8lNvyxnUrBSh7yPDckTsIF2K18OWhUAoNTqvn8Q==');
+        audio.play().catch(e => console.log('Audio play failed:', e));
+      } catch(e) {
+        console.log('Audio notification not available');
+      }
+    }
+
+    // ============================================
+    // INITIALIZE MAP
+    // ============================================
+    function initMap() {
+      if (typeof mappls === 'undefined') {
+        console.error('Mappls SDK not loaded');
+        setTimeout(initMap, 500);
+        return;
+      }
+      
+      // Use agent's current location or default to Delhi
+      const centerLat = agentCurrentLat || 28.6139;
+      const centerLng = agentCurrentLng || 77.2090;
 
       // Online/Offline Toggle
       const onlineToggle = document.getElementById("onlineToggle");
@@ -201,27 +468,34 @@
       });
     });
 
-    // ============================================
-    // INITIALIZE MAP
-    // ============================================
-    function initMap() {
-      if (typeof mappls === 'undefined') {
-        console.error('Mappls SDK not loaded');
-        return;
-      }
+      
+      // Use agent's current location or default to Delhi
+      const centerLat = agentCurrentLat || 28.6139;
+      const centerLng = agentCurrentLng || 77.2090;
       
       map = new mappls.Map('map', { 
-        center: [28.6139, 77.2090], 
+        center: [centerLat, centerLng], 
         zoom: 13 
       });
+
+      // Add agent marker if location is available
+      if (agentCurrentLat && agentCurrentLng) {
+        agentMarker = new mappls.Marker({
+          map: map,
+          position: [agentCurrentLat, agentCurrentLng],
+          popupHtml: "🛵 You are here",
+          icon: 'https://apis.mappls.com/map_v3/3.png'
+        });
+      }
     }
 
     // ============================================
     // LOAD ORDERS
     // ============================================
     async function loadOrders() {
-      // Don't load orders if offline
-      if (!isOnline) {
+      // Don't load orders if offline or no location permission
+      if (!isOnline || !locationPermissionGranted) {
+        console.log("Cannot load orders: offline or no location permission");
         return;
       }
 
@@ -241,15 +515,32 @@
         });
         
         if (!res.ok) {
+          if (res.status === 401) {
+            alert("Session expired. Please login again");
+            window.location.href = "login.html";
+            return;
+          }
           const error = await res.json();
-          alert("Error loading orders: " + (error.message || "Server error"));
+          console.error("Error loading orders:", error);
+          document.getElementById("ordersList").innerHTML = 
+            '<p class="text-red-500">Error loading orders: ' + (error.message || "Server error") + '</p>';
           return;
         }
         
         const orders = await res.json();
+        console.log("📦 Loaded orders:", orders);
 
-        const availableOrders = orders.filter(o => !o.agent_id || o.agent_id === agentId);
-        const activeOrders = orders.filter(o => o.agent_id === agentId && o.status !== 'Delivered');
+        // Filter orders: available (no agent or assigned to this agent)
+        const availableOrders = orders.filter(o => 
+          !o.agent_id || o.agent_id === agentId
+        );
+        
+        // Active orders are those assigned to this agent and not yet delivered
+        const activeOrders = orders.filter(o => 
+          o.agent_id === agentId && 
+          o.status !== 'Delivered' && 
+          o.status !== 'Cancelled'
+        );
 
         document.getElementById("availableCount").textContent = availableOrders.length;
         document.getElementById("activeCount").textContent = activeOrders.length;
@@ -257,7 +548,8 @@
         renderOrders(availableOrders);
       } catch (err) {
         console.error("Load orders error:", err);
-        alert("Error loading orders: " + err.message);
+        document.getElementById("ordersList").innerHTML = 
+          '<p class="text-red-500">Error loading orders. Please refresh the page.</p>';
       }
     }
 
@@ -268,7 +560,7 @@
       const list = document.getElementById("ordersList");
       
       if (!orders || orders.length === 0) {
-        list.innerHTML = '<p class="text-gray-500">No available orders</p>';
+        list.innerHTML = '<p class="text-gray-500">No available orders at the moment. New orders will appear here automatically.</p>';
         return;
       }
 
@@ -283,6 +575,17 @@
 
         const isAssigned = order.agent_id === agentId;
 
+        // Parse delivery address
+        let deliveryAddress = "N/A";
+        try {
+          if (order.delivery_address) {
+            const addr = typeof order.delivery_address === 'string' 
+              ? JSON.parse(order.delivery_address) 
+              : order.delivery_address;
+            deliveryAddress = `${addr.house || ''}, ${addr.street || ''}, ${addr.city || ''}`.trim();
+          }
+        } catch(_) {}
+
         return `
           <div class="order-card bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg border-2 border-blue-200 ${isAssigned ? 'tracking-active' : ''}">
             <div class="flex justify-between items-start mb-3">
@@ -295,10 +598,12 @@
               </span>
             </div>
 
-            <div class="mb-3 text-sm text-gray-700">
-              <p><strong>Items:</strong> ${itemsText}</p>
-              <p><strong>Restaurant:</strong> ${order.restaurant_name || 'N/A'}</p>
-              <p><strong>Customer:</strong> ${order.customer_name || 'Unknown'}</p>
+            <div class="mb-3 text-sm text-gray-700 space-y-1">
+              <p><strong>📦 Items:</strong> ${itemsText}</p>
+              <p><strong>🏪 Restaurant:</strong> ${order.restaurant_name || 'N/A'}</p>
+              <p><strong>👤 Customer:</strong> ${order.customer_name || 'Unknown'}</p>
+              <p><strong>📱 Phone:</strong> ${order.customer_phone || 'N/A'}</p>
+              <p><strong>📍 Delivery:</strong> ${deliveryAddress}</p>
             </div>
 
             ${!isAssigned ? `
@@ -322,6 +627,14 @@
     // ============================================
     async function acceptOrder(orderId) {
       try {
+        if (!locationPermissionGranted) {
+          alert("⚠️ You must grant location permission first to accept orders.");
+          await requestLocationPermission();
+          if (!locationPermissionGranted) {
+            return;
+          }
+        }
+
         const token = localStorage.getItem("token");
         if (!token) {
           alert("Session expired. Please login again");
@@ -341,13 +654,26 @@
         const data = await res.json();
 
         if (data.success || res.ok) {
-          alert("✅ Order accepted! You can now start tracking.");
+          showNotification("✅ Order accepted! You can now start tracking.");
           
           // Emit socket event to notify tracking page that agent accepted the order
           socket.emit("orderAccepted", {
             orderId: orderId,
             agentId: agentId,
             agentName: document.getElementById("agentName").textContent,
+            agentLocation: {
+              lat: agentCurrentLat,
+              lng: agentCurrentLng
+            },
+            timestamp: new Date().toISOString()
+          });
+          
+          // Notify the customer's tracking page
+          socket.emit(`order_${orderId}_update`, {
+            type: "agent_assigned",
+            order_id: orderId,
+            agent_id: agentId,
+            agent_name: document.getElementById("agentName").textContent,
             timestamp: new Date().toISOString()
           });
           
@@ -460,10 +786,32 @@
       // Send location every 5 seconds
       locationInterval = setInterval(() => {
         navigator.geolocation.getCurrentPosition(
-          (position) => {
+          async (position) => {
             const { latitude, longitude, accuracy, speed, heading } = position.coords;
 
-            // Send to server
+            agentCurrentLat = latitude;
+            agentCurrentLng = longitude;
+
+            // Send to server for database storage via API
+            try {
+              const token = localStorage.getItem("token");
+              await fetch(`${API_BASE_URL}/delivery/update-location`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                  agent_id: agentId,
+                  lat: latitude,
+                  lng: longitude
+                })
+              });
+            } catch(err) {
+              console.error("Failed to update location in DB:", err);
+            }
+
+            // Emit via socket for real-time updates
             socket.emit("agent_location_update", {
               agent_id: agentId,
               order_id: currentOrderId,
@@ -471,7 +819,19 @@
               longitude,
               accuracy,
               speed,
-              heading
+              heading,
+              timestamp: new Date().toISOString()
+            });
+
+            // Also emit directly to customer tracking page
+            socket.emit(`order_${currentOrderId}_location`, {
+              agent_id: agentId,
+              latitude,
+              longitude,
+              accuracy,
+              speed,
+              heading,
+              timestamp: new Date().toISOString()
             });
 
             // Update agent marker on map
@@ -481,6 +841,11 @@
           },
           (error) => {
             console.error("Location error:", error);
+            // If location permission is lost, stop tracking
+            if (error.code === error.PERMISSION_DENIED) {
+              alert("⚠️ Location permission was revoked. Stopping tracking.");
+              stopTracking();
+            }
           },
           {
             enableHighAccuracy: true,
@@ -620,7 +985,9 @@
     // ============================================
     function logout() {
       stopTracking();
-      localStorage.removeItem("agent");
+      localStorage.removeItem("user");
+      localStorage.removeItem("token");
+      socket.disconnect();
       window.location.href = "delivery-login.html";
     }
   </script>
