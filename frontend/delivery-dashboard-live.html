@@ -486,9 +486,7 @@
         return;
       }
       
-      // Use agent's current location or default to Delhi
-      const centerLat = agentCurrentLat || 28.6139;
-      const centerLng = agentCurrentLng || 77.2090;
+     
 
       // (handled earlier during initialization)
       
@@ -519,10 +517,8 @@
           loadOrders();
         }
       });
-    });
 
-      
-      // Use agent's current location or default to Delhi
+      // Initialize the map
       const centerLat = agentCurrentLat || 28.6139;
       const centerLng = agentCurrentLng || 77.2090;
       
