@@ -44,7 +44,7 @@
   <div class="container mx-auto p-6">
     
     <!-- Status Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
       <div class="bg-white p-6 rounded-xl shadow-lg">
         <h3 class="text-gray-600 text-sm font-semibold">Available Orders</h3>
         <p id="availableCount" class="text-4xl font-bold text-blue-600">0</p>
@@ -56,6 +56,14 @@
       <div class="bg-white p-6 rounded-xl shadow-lg">
         <h3 class="text-gray-600 text-sm font-semibold">Tracking Status</h3>
         <p id="trackingStatus" class="text-2xl font-bold text-purple-600">Offline</p>
+      </div>
+      <div class="bg-white p-6 rounded-xl shadow-lg">
+        <h3 class="text-gray-600 text-sm font-semibold">Today’s Earnings</h3>
+        <p id="earnToday" class="text-3xl font-bold text-green-600">₹0</p>
+      </div>
+      <div class="bg-white p-6 rounded-xl shadow-lg">
+        <h3 class="text-gray-600 text-sm font-semibold">Wallet Balance</h3>
+        <p id="walletBalance" class="text-3xl font-bold text-amber-600">₹0</p>
       </div>
     </div>
 
@@ -74,6 +82,25 @@
 
         <!-- Map -->
         <div id="map" class="mb-4 shadow-lg"></div>
+
+        <!-- Live Metrics -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <div class="bg-white/20 p-3 rounded">
+            <p class="text-xs opacity-80">Distance</p>
+            <p id="liveDistance" class="text-xl font-bold">-- km</p>
+          </div>
+          <div class="bg-white/20 p-3 rounded">
+            <p class="text-xs opacity-80">ETA</p>
+            <p id="liveETA" class="text-xl font-bold">-- mins</p>
+          </div>
+          <div class="bg-white/20 p-3 rounded">
+            <p class="text-xs opacity-80">Navigation</p>
+            <div class="flex gap-2 mt-1">
+              <button id="navToRestaurantBtn" class="bg-black/30 px-3 py-1 rounded hover:bg-black/40" onclick="openNavigation('restaurant')">To Restaurant</button>
+              <button id="navToCustomerBtn" class="bg-black/30 px-3 py-1 rounded hover:bg-black/40" onclick="openNavigation('customer')">To Customer</button>
+            </div>
+          </div>
+        </div>
 
         <!-- Action Buttons -->
         <div class="grid grid-cols-2 gap-3">
@@ -97,6 +124,14 @@
                   class="bg-green-700 text-white px-4 py-3 rounded-lg font-semibold hover:bg-green-800 col-span-2">
             ✅ Delivered
           </button>
+        </div>
+
+        <!-- Quick Messages -->
+        <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+          <button class="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700" onclick="sendQuickMessage('reached_restaurant')">Reached restaurant</button>
+          <button class="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700" onclick="sendQuickMessage('order_picked')">Order picked up</button>
+          <button class="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700" onclick="sendQuickMessage('arriving_5')">Arriving in 5 minutes</button>
+          <button class="bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700" onclick="emergencyCall()">Emergency Call</button>
         </div>
 
         <button onclick="stopTracking()" class="w-full mt-3 bg-red-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-red-700">
@@ -142,9 +177,31 @@
     // INITIALIZATION
     // ============================================
     document.addEventListener("DOMContentLoaded", async () => {
-      // Get agent from localStorage (stored as 'user' after login)
-      const agent = JSON.parse(localStorage.getItem("user") || "{}");
-      agentId = agent.id;
+      // Resolve agent from logged-in user
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const token = localStorage.getItem("token");
+      if (!user?.id || !token) {
+        alert("Please login first");
+        window.location.href = "login.html";
+        return;
+      }
+      // Resolve agentId via backend mapping
+      try {
+        const resAgent = await fetch(`${API_BASE_URL}/delivery/by-user/${user.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resAgent.ok) {
+          const agentObj = await resAgent.json();
+          agentId = agentObj.id;
+          document.getElementById("agentName").textContent = agentObj.name || user.name || "Agent";
+        } else {
+          agentId = user.id; // fallback
+          document.getElementById("agentName").textContent = user.name || "Agent";
+        }
+      } catch(_) {
+        agentId = user.id;
+        document.getElementById("agentName").textContent = user.name || "Agent";
+      }
 
       if (!agentId) {
         alert("Please login first");
@@ -152,23 +209,35 @@
         return;
       }
 
-      document.getElementById("agentName").textContent = agent.name || "Agent";
       
-      // ✅ STEP 1: Request Location Permission FIRST
-      await requestLocationPermission();
       // ✅ STEP 1: Request Location Permission FIRST
       await requestLocationPermission();
       
       // Initialize map with agent's current location
       initMap();
 
+      // Load earnings & wallet
+      loadEarnings();
+
       // Online/Offline Toggle
       const onlineToggle = document.getElementById("onlineToggle");
-      onlineToggle.addEventListener("change", (e) => {
+      onlineToggle.addEventListener("change", async (e) => {
         isOnline = e.target.checked;
         const status = document.getElementById("onlineStatus");
         const offlineMsg = document.getElementById("offlineMessage");
         
+        // Inform backend of availability
+        try {
+          const token = localStorage.getItem("token");
+          await fetch(`${API_BASE_URL}/delivery/availability`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ agent_id: agentId, available: isOnline })
+          });
+        } catch (err) {
+          console.warn("Availability update failed:", err?.message || err);
+        }
+
         if (isOnline) {
           status.textContent = "🟢 Online";
           offlineMsg.classList.add("hidden");
@@ -421,23 +490,7 @@
       const centerLat = agentCurrentLat || 28.6139;
       const centerLng = agentCurrentLng || 77.2090;
 
-      // Online/Offline Toggle
-      const onlineToggle = document.getElementById("onlineToggle");
-      onlineToggle.addEventListener("change", (e) => {
-        isOnline = e.target.checked;
-        const status = document.getElementById("onlineStatus");
-        const offlineMsg = document.getElementById("offlineMessage");
-        
-        if (isOnline) {
-          status.textContent = "🟢 Online";
-          offlineMsg.classList.add("hidden");
-          loadOrders();
-        } else {
-          status.textContent = "🔴 Offline";
-          offlineMsg.classList.remove("hidden");
-          document.getElementById("ordersList").innerHTML = '<p class="text-gray-500 italic">You are offline. Turn on the toggle to see available orders.</p>';
-        }
-      });
+      // (handled earlier during initialization)
       
       // Load orders immediately
       loadOrders();
@@ -554,6 +607,32 @@
     }
 
     // ============================================
+    // LOAD EARNINGS AND WALLET
+    // ============================================
+    async function loadEarnings() {
+      try {
+        if (!agentId) return;
+        const token = localStorage.getItem("token");
+        const earnRes = await fetch(`${API_BASE_URL}/delivery/${agentId}/earnings`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (earnRes.ok) {
+          const earnData = await earnRes.json();
+          const today = earnData?.summary?.total_earnings || 0;
+          const el = document.getElementById('earnToday');
+          if (el) el.textContent = `₹${Number(today).toFixed(0)}`;
+        }
+        const walletRes = await fetch(`${API_BASE_URL}/delivery/${agentId}/wallet`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (walletRes.ok) {
+          const walletData = await walletRes.json();
+          const bal = walletData?.wallet?.balance || 0;
+          const elw = document.getElementById('walletBalance');
+          if (elw) elw.textContent = `₹${Number(bal).toFixed(0)}`;
+        }
+      } catch (e) {
+        console.warn("Earnings/wallet fetch failed:", e?.message || e);
+      }
+    }
+
+    // ============================================
     // RENDER ORDERS
     // ============================================
     function renderOrders(orders) {
@@ -615,6 +694,10 @@
               <button onclick="startTracking(${order.id})" 
                       class="w-full bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-purple-700 transition-all">
                 📍 Start Live Tracking
+              </button>
+              <button onclick="rejectOrder(${order.id})" 
+                      class="w-full mt-2 bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition-all">
+                ❌ Reject Order
               </button>
             `}
           </div>
@@ -767,6 +850,9 @@
           } catch(e) {
             console.warn("Fit bounds error:", e);
           }
+
+          // Initialize metrics
+          computeLiveMetrics();
         }
       } catch (err) {
         console.error("Start tracking error:", err);
@@ -895,6 +981,8 @@
           console.warn("Update polyline error:", e);
         }
       }
+
+      computeLiveMetrics();
     }
 
     // ============================================
@@ -935,6 +1023,8 @@
               } catch(e) {
                 console.warn("Update route error:", e);
               }
+
+              computeLiveMetrics();
             }
           } else {
             alert("❌ Failed to update status");
@@ -943,6 +1033,108 @@
       } catch (err) {
         console.error("Status update error:", err);
       }
+    }
+
+    // ============================================
+    // REJECT ORDER
+    // ============================================
+    async function rejectOrder(orderId) {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE_URL}/tracking/orders/${orderId}/reject`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ agent_id: agentId, reason: 'agent_choice' })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showNotification("Order rejected and returned to queue");
+          stopTracking();
+          loadOrders();
+        } else {
+          alert(data.error || 'Failed to reject order');
+        }
+      } catch (e) {
+        console.error("Reject order error:", e);
+      }
+    }
+
+    // ============================================
+    // QUICK MESSAGES
+    // ============================================
+    async function sendQuickMessage(type) {
+      if (!currentOrderId) return;
+      const messages = {
+        reached_restaurant: "Reached restaurant",
+        order_picked: "Order picked up",
+        arriving_5: "Arriving in 5 minutes"
+      };
+      const msg = messages[type] || "Update";
+      try {
+        const token = localStorage.getItem("token");
+        await fetch(`${API_BASE_URL}/tracking/orders/${currentOrderId}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ sender_id: agentId, sender_type: 'agent', message: msg })
+        });
+        showNotification("💬 Sent: " + msg);
+      } catch (e) {
+        console.error("Quick message error:", e);
+      }
+    }
+
+    // ============================================
+    // EMERGENCY CALL
+    // ============================================
+    function emergencyCall() {
+      window.location.href = 'tel:112';
+    }
+
+    // ============================================
+    // NAVIGATION LINKS
+    // ============================================
+    function openNavigation(target) {
+      let latLng = null;
+      if (target === 'restaurant' && restaurantMarker) {
+        const pos = restaurantMarker.getPosition();
+        latLng = Array.isArray(pos) ? pos : [pos.lat, pos.lng];
+      } else if (target === 'customer' && customerMarker) {
+        const pos = customerMarker.getPosition();
+        latLng = Array.isArray(pos) ? pos : [pos.lat, pos.lng];
+      }
+      if (!latLng) return;
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${latLng[0]},${latLng[1]}`;
+      window.open(url, '_blank');
+    }
+
+    // ============================================
+    // LIVE METRICS (Distance & ETA)
+    // ============================================
+    function computeLiveMetrics() {
+      if (!agentMarker) return;
+      let target = null;
+      if (routeLine && customerMarker) {
+        target = customerMarker.getPosition();
+      } else if (restaurantMarker) {
+        target = restaurantMarker.getPosition();
+      }
+      if (!target) return;
+      const agentPos = agentMarker.getPosition();
+      const aLat = Array.isArray(agentPos) ? agentPos[0] : agentPos.lat;
+      const aLng = Array.isArray(agentPos) ? agentPos[1] : agentPos.lng;
+      const tLat = Array.isArray(target) ? target[0] : target.lat;
+      const tLng = Array.isArray(target) ? target[1] : target.lng;
+      const R = 6371;
+      const dLat = (tLat - aLat) * Math.PI / 180;
+      const dLon = (tLng - aLng) * Math.PI / 180;
+      const aa = Math.sin(dLat/2)**2 + Math.cos(aLat*Math.PI/180) * Math.cos(tLat*Math.PI/180) * Math.sin(dLon/2)**2;
+      const c = 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1-aa));
+      const km = R * c;
+      const minutes = Math.max(1, Math.round((km / 30) * 60));
+      const distanceEl = document.getElementById('liveDistance');
+      const etaEl = document.getElementById('liveETA');
+      if (distanceEl) distanceEl.textContent = `${km.toFixed(2)} km`;
+      if (etaEl) etaEl.textContent = `${minutes} mins`;
     }
 
     // ============================================

@@ -292,4 +292,7 @@
     }
 
 
+    // Initialize immediately
+    init();
+
 })();
