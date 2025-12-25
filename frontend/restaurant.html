@@ -120,12 +120,14 @@
             </div>
             <!-- Mobile swipe-to-checkout slider -->
             <div class="md:hidden mt-4 flex flex-col gap-2">
-              <div id="mobile-swipe-slider" class="relative h-14 bg-gradient-to-r from-green-500 to-green-600 rounded-lg overflow-hidden cursor-grab active:cursor-grabbing flex items-center select-none" role="slider" aria-label="Swipe to checkout">
-                <div id="swipe-progress" class="absolute inset-0 bg-green-600 opacity-0 transition-opacity"></div>
-                <div id="swipe-handle" class="absolute left-2 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center z-10 transition-all transform">
-                  <span class="text-xl">→</span>
+              <div id="mobile-swipe-slider" class="relative h-16 bg-gradient-to-r from-green-500 to-green-600 rounded-2xl overflow-hidden cursor-grab active:cursor-grabbing flex items-center select-none px-3" role="slider" aria-label="Swipe to checkout" aria-live="polite">
+                <div id="swipe-progress" class="absolute inset-0 bg-green-600 opacity-0" aria-hidden="true"></div>
+                <div id="swipe-label" class="absolute inset-0 flex items-center justify-center text-white font-semibold text-sm pointer-events-none">Swipe to checkout</div>
+                <div id="swipe-bike" class="relative w-14 h-14 bg-white rounded-full shadow-lg flex items-center justify-center z-10">
+                  <div class="bike-body"></div>
+                  <div class="bike-wheel wheel-left"></div>
+                  <div class="bike-wheel wheel-right"></div>
                 </div>
-                <span class="absolute inset-0 flex items-center justify-center text-white font-semibold text-sm pointer-events-none">Swipe to checkout</span>
               </div>
               <button id="panel-clear" class="w-full border-2 border-green-600 text-green-700 py-2 rounded-lg hover:bg-green-50 transition">Clear</button>
               </div>
@@ -188,14 +190,57 @@
       user-select: none;
       -webkit-user-select: none;
       -webkit-touch-callout: none;
+      padding-left: 12px;
+      padding-right: 12px;
     }
 
-    #swipe-handle {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    #swipe-progress {
+      width: 0%;
+      opacity: 0;
+      transition: width 260ms ease, opacity 200ms ease;
+      will-change: width, opacity;
     }
 
-    #swipe-handle.swiping {
-      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+    #swipe-bike {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+      transform: translateX(0);
+      transition: transform 260ms cubic-bezier(0.25, 0.9, 0.3, 1);
+      will-change: transform;
+    }
+
+    #swipe-bike.dragging {
+      transition: none;
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
+    }
+
+    .bike-body {
+      width: 24px;
+      height: 12px;
+      background: linear-gradient(135deg, #16a34a, #22c55e);
+      border-radius: 6px;
+      position: relative;
+      top: -2px;
+    }
+
+    .bike-wheel {
+      width: 12px;
+      height: 12px;
+      border: 2px solid #16a34a;
+      border-radius: 50%;
+      position: absolute;
+      bottom: 2px;
+      background: radial-gradient(circle at 50% 50%, #22c55e 0%, #16a34a 50%, transparent 55%);
+      transform: rotate(var(--wheel-rotation, 0deg));
+      transition: transform 260ms linear;
+    }
+
+    #swipe-bike.dragging .bike-wheel { transition: none; }
+
+    .wheel-left { left: 8px; }
+    .wheel-right { right: 8px; }
+
+    #swipe-label {
+      transition: opacity 160ms ease;
     }
 
     #swipe-progress {
@@ -617,76 +662,124 @@
 
         // ===== MOBILE SWIPE-TO-CHECKOUT LOGIC =====
         const swipeSlider = document.getElementById('mobile-swipe-slider');
-        const swipeHandle = document.getElementById('swipe-handle');
+        const swipeBike = document.getElementById('swipe-bike');
         const swipeProgress = document.getElementById('swipe-progress');
-        let isSwipeActive = false;
-        let swipeStartX = 0;
+        const swipeLabel = document.getElementById('swipe-label');
+        let isDragging = false;
+        let startX = 0;
+        let translateX = 0;
+        let maxTranslate = 0;
         let sliderRect = null;
+        let rafId = null;
+        const padding = 12; // matches slider horizontal padding
+        const successThreshold = 0.65;
+        const minIntentPx = 8;
+        const preventScroll = (evt) => { if (isDragging) evt.preventDefault(); };
+
+        function setBikePosition(x, progress) {
+          swipeBike.style.transform = `translateX(${x}px)`;
+          swipeProgress.style.width = `${Math.min(100, Math.max(0, (x + swipeBike.offsetWidth * 0.5) / sliderRect.width * 100))}%`;
+          swipeProgress.style.opacity = progress > 0.02 ? 0.25 + progress * 0.4 : 0;
+          const rotation = Math.min(720, progress * 900);
+          swipeBike.style.setProperty('--wheel-rotation', `${rotation}deg`);
+          swipeBike.querySelectorAll('.bike-wheel').forEach(w => w.style.transform = `rotate(${rotation}deg)`);
+          if (swipeLabel) swipeLabel.style.opacity = progress > 0.15 ? 0.6 : 1;
+        }
+
+        function animateBike() {
+          const clamped = Math.max(0, Math.min(translateX, maxTranslate));
+          const progress = maxTranslate === 0 ? 0 : clamped / maxTranslate;
+          setBikePosition(padding + clamped, progress);
+          rafId = null;
+        }
+
+        function handleSwipeStart(e) {
+          if (!isMobileView()) return;
+          const cart = getCart();
+          if (!cart.length) { e.preventDefault(); return; }
+          sliderRect = swipeSlider.getBoundingClientRect();
+          const bikeWidth = swipeBike.offsetWidth;
+          maxTranslate = Math.max(0, sliderRect.width - bikeWidth - padding * 2);
+          startX = e.clientX || (e.touches && e.touches[0]?.clientX) || 0;
+          translateX = 0;
+          isDragging = true;
+          swipeBike.classList.add('dragging');
+          swipeBike.style.transition = 'none';
+          swipeProgress.style.transition = 'none';
+          swipeSlider.style.cursor = 'grabbing';
+          document.addEventListener('touchmove', preventScroll, { passive: false });
+          e.preventDefault();
+        }
+
+        function handleSwipeMove(e) {
+          if (!isDragging || !sliderRect) return;
+          const currentX = e.clientX || (e.touches && e.touches[0]?.clientX) || startX;
+          const delta = currentX - startX;
+          if (Math.abs(delta) < minIntentPx && translateX === 0) { e.preventDefault(); return; }
+          translateX = Math.max(0, Math.min(delta, maxTranslate));
+          if (!rafId) rafId = requestAnimationFrame(animateBike);
+          e.preventDefault();
+        }
+
+        function resetBike() {
+          swipeBike.classList.remove('dragging');
+          swipeBike.style.transition = 'transform 320ms cubic-bezier(0.25, 1.4, 0.4, 1)';
+          swipeProgress.style.transition = 'width 260ms ease, opacity 200ms ease';
+          setBikePosition(padding, 0);
+        }
+
+        function completeBikeSwipe() {
+          swipeBike.classList.remove('dragging');
+          swipeBike.style.transition = 'transform 200ms ease-out';
+          swipeProgress.style.transition = 'width 200ms ease, opacity 200ms ease';
+          setBikePosition(padding + maxTranslate, 1);
+          if (navigator.vibrate) navigator.vibrate(100);
+          closeCartPanel();
+          setTimeout(proceedToCheckout, 180);
+        }
+
+        function handleSwipeEnd(e) {
+          if (!isDragging || !sliderRect) return;
+          isDragging = false;
+          swipeSlider.style.cursor = 'grab';
+          document.removeEventListener('touchmove', preventScroll, { passive: false });
+          const currentX = e?.clientX || (e?.changedTouches && e.changedTouches[0]?.clientX) || (startX + translateX);
+          const delta = currentX - startX;
+          const progress = maxTranslate === 0 ? 0 : Math.max(0, Math.min(delta, maxTranslate)) / maxTranslate;
+          if (progress >= successThreshold) {
+            completeBikeSwipe();
+          } else {
+            resetBike();
+          }
+          e.preventDefault();
+        }
 
         function enableSwipe() {
           if (!isMobileView() || !swipeSlider) return;
           swipeSlider.addEventListener('pointerdown', handleSwipeStart, { passive: false });
-          document.addEventListener('pointermove', handleSwipeMove, { passive: false });
-          document.addEventListener('pointerup', handleSwipeEnd, { passive: false });
-          document.addEventListener('pointercancel', handleSwipeEnd, { passive: false });
+          swipeSlider.addEventListener('touchstart', handleSwipeStart, { passive: false });
+          swipeSlider.addEventListener('pointermove', handleSwipeMove, { passive: false });
+          swipeSlider.addEventListener('touchmove', handleSwipeMove, { passive: false });
+          swipeSlider.addEventListener('pointerup', handleSwipeEnd, { passive: false });
+          swipeSlider.addEventListener('touchend', handleSwipeEnd, { passive: false });
+          swipeSlider.addEventListener('pointercancel', handleSwipeEnd, { passive: false });
+          swipeSlider.addEventListener('touchcancel', handleSwipeEnd, { passive: false });
         }
 
         function disableSwipe() {
           if (!swipeSlider) return;
           swipeSlider.removeEventListener('pointerdown', handleSwipeStart);
-          document.removeEventListener('pointermove', handleSwipeMove);
-          document.removeEventListener('pointerup', handleSwipeEnd);
-          document.removeEventListener('pointercancel', handleSwipeEnd);
-        }
-
-        function handleSwipeStart(e) {
-          const cart = getCart();
-          if (!cart.length) { e.preventDefault(); return; }
-          isSwipeActive = true;
-          swipeStartX = e.clientX;
-          sliderRect = swipeSlider.getBoundingClientRect();
-          swipeHandle.classList.add('swiping');
-          swipeSlider.style.cursor = 'grabbing';
-          e.preventDefault();
-        }
-
-        function handleSwipeMove(e) {
-          if (!isSwipeActive || !sliderRect) return;
-          e.preventDefault();
-          const currentX = e.clientX;
-          const swipeDistance = Math.max(0, currentX - swipeStartX);
-          const sliderWidth = sliderRect.width;
-          const progress = Math.min(swipeDistance / sliderWidth, 1);
-          const maxTranslate = sliderWidth - 60;
-          const translateX = progress * maxTranslate;
-          swipeHandle.style.transform = `translateX(${translateX}px)`;
-          swipeProgress.style.opacity = Math.min(progress * 0.5, 0.3);
-          if (progress > 0.05) swipeProgress.classList.add('active');
-        }
-
-        function handleSwipeEnd(e) {
-          if (!isSwipeActive) return;
-          e.preventDefault();
-          isSwipeActive = false;
-          swipeHandle.classList.remove('swiping');
-          swipeSlider.style.cursor = 'grab';
-          const currentX = e.clientX || swipeStartX;
-          const swipeDistance = currentX - swipeStartX;
-          const sliderWidth = sliderRect.width;
-          const progress = swipeDistance / sliderWidth;
-          if (progress >= 0.7) {
-            swipeHandle.style.transform = 'translateX(0)';
-            swipeProgress.style.opacity = 0;
-            swipeProgress.classList.remove('active');
-            if (navigator.vibrate) navigator.vibrate(100);
-            closeCartPanel();
-            setTimeout(proceedToCheckout, 200);
-          } else {
-            swipeHandle.style.transition = 'transform 200ms ease';
-            swipeHandle.style.transform = 'translateX(0)';
-            swipeProgress.style.opacity = 0;
-            swipeProgress.classList.remove('active');
-            setTimeout(() => { swipeHandle.style.transition = ''; }, 200);
+          swipeSlider.removeEventListener('touchstart', handleSwipeStart);
+          swipeSlider.removeEventListener('pointermove', handleSwipeMove);
+          swipeSlider.removeEventListener('touchmove', handleSwipeMove);
+          swipeSlider.removeEventListener('pointerup', handleSwipeEnd);
+          swipeSlider.removeEventListener('touchend', handleSwipeEnd);
+          swipeSlider.removeEventListener('pointercancel', handleSwipeEnd);
+          swipeSlider.removeEventListener('touchcancel', handleSwipeEnd);
+          document.removeEventListener('touchmove', preventScroll, { passive: false });
+          if (swipeBike && swipeProgress) {
+            sliderRect = swipeSlider.getBoundingClientRect();
+            setBikePosition(padding, 0);
           }
         }
 
@@ -701,6 +794,10 @@
           renderCartPanel();
           syncMenuButtons();
           unlockBodyScroll();
+          if (swipeSlider && swipeBike) {
+            sliderRect = swipeSlider.getBoundingClientRect();
+            setBikePosition(padding, 0);
+          }
         });
 
         window.addEventListener('beforeunload', () => {
