@@ -113,9 +113,21 @@
                 <span>Total</span>
                 <span id="panel-total">₹0</span>
               </div>
-              <div class="mt-4 flex gap-3">
-                <button id="panel-proceed" class="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition">Checkout</button>
-                <button id="panel-clear" class="flex-1 border-2 border-green-600 text-green-700 py-2 rounded-lg hover:bg-green-50 transition">Clear</button>
+            <!-- Desktop checkout button -->
+            <div class="hidden md:flex mt-4 gap-3">
+              <button id="panel-proceed" class="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition">Checkout</button>
+              <button id="panel-clear" class="flex-1 border-2 border-green-600 text-green-700 py-2 rounded-lg hover:bg-green-50 transition">Clear</button>
+            </div>
+            <!-- Mobile swipe-to-checkout slider -->
+            <div class="md:hidden mt-4 flex flex-col gap-2">
+              <div id="mobile-swipe-slider" class="relative h-14 bg-gradient-to-r from-green-500 to-green-600 rounded-lg overflow-hidden cursor-grab active:cursor-grabbing flex items-center select-none" role="slider" aria-label="Swipe to checkout">
+                <div id="swipe-progress" class="absolute inset-0 bg-green-600 opacity-0 transition-opacity"></div>
+                <div id="swipe-handle" class="absolute left-2 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center z-10 transition-all transform">
+                  <span class="text-xl">→</span>
+                </div>
+                <span class="absolute inset-0 flex items-center justify-center text-white font-semibold text-sm pointer-events-none">Swipe to checkout</span>
+              </div>
+              <button id="panel-clear" class="w-full border-2 border-green-600 text-green-700 py-2 rounded-lg hover:bg-green-50 transition">Clear</button>
               </div>
             </div>
           </div>
@@ -130,18 +142,91 @@
   </button>
 
   <style>
-    /* Cart bottom sheet on mobile, sticky on desktop */
-    #cart-panel { position: fixed; left: 0; right: 0; bottom: 0; max-height: 80vh; transform: translateY(110%); transition: transform 200ms ease, box-shadow 200ms ease; }
-    #cart-panel.open { transform: translateY(0); box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
-    @media (min-width: 1024px) {
-      #cart-panel { transform: none; max-height: calc(100vh - 140px); position: sticky; top: 96px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
-      #cart-panel.open { transform: none; }
-      #open-cart-btn { display: none; }
+    /* ========== MOBILE CART BOTTOM SHEET ========== */
+    @media (max-width: 767px) {
+      #cart-panel {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 100vh;
+        max-height: 85vh;
+        background: white;
+        border-radius: 20px 20px 0 0;
+        transform: translateY(100%);
+        transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+        z-index: 45;
+        box-shadow: 0 -5px 40px rgba(0, 0, 0, 0.15);
+        overflow: hidden;
+      }
+      #cart-panel.open {
+        transform: translateY(0);
+      }
     }
-    /* Small hover affordance for menu cards and controls */
-    #open-cart-btn:hover { transform: translateY(-3px); transition: transform 120ms; }
+
+    /* ========== DESKTOP STICKY CART ========== */
+    @media (min-width: 1024px) {
+      #cart-panel {
+        position: sticky !important;
+        left: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        max-height: calc(100vh - 140px) !important;
+        transform: none !important;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        z-index: auto;
+      }
+      #cart-panel.open { transform: none !important; }
+      #open-cart-btn { display: none; }
+      #mobile-swipe-slider { display: none !important; }
+    }
+
+    /* ========== SWIPE SLIDER STYLING ========== */
+    #mobile-swipe-slider {
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    #swipe-handle {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    #swipe-handle.swiping {
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+    }
+
+    #swipe-progress {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    #swipe-progress.active {
+      opacity: 1 !important;
+    }
+
+    /* ========== MOBILE BUTTON STYLING ========== */
+    #open-cart-btn {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+      transition: all 200ms ease;
+      z-index: 40;
+    }
+
+    #open-cart-btn:active {
+      transform: translateY(0px);
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+    }
+
+    /* ========== GENERAL ========== */
     .cart-item:hover .hover-controls { opacity: 1; transform: translateX(0); }
     .hover-controls { opacity: 0; transform: translateX(6px); transition: all 160ms ease; }
+
+    /* Prevent text selection during interaction */
+    #mobile-swipe-slider * {
+      pointer-events: none;
+    }
   </style>
 
   <!-- Footer -->
@@ -385,10 +470,18 @@
       document.body.appendChild(modal);
     }
 
-    // Remove Proceed to Payment button
-    const proceedToPaymentBtn = document.getElementById("panel-proceed")
-
-    if (proceedToPaymentBtn) proceedToPaymentBtn.remove();
+    // ===== MOBILE SCROLL LOCK UTILITIES =====
+    function lockBodyScroll() {
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+    }
+    
+    function unlockBodyScroll() {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    }
 
     // ===== Right-side Cart Panel Logic =====
     const CART_KEY = 'tindo_cart';
@@ -402,18 +495,31 @@
     const panelProceed = document.getElementById('panel-proceed');
     const panelClear = document.getElementById('panel-clear');
 
+    function isMobileView() {
+      return window.innerWidth < 768;
+    }
+
     function openCartPanel() {
       cartPanel.classList.add('open');
-      // ensure content is fresh
       renderCartPanel();
+      if (isMobileView()) {
+        lockBodyScroll();
+      }
     }
+    
     function closeCartPanel() {
       cartPanel.classList.remove('open');
+      if (isMobileView()) {
+        unlockBodyScroll();
+      }
     }
-    openCartBtn.addEventListener('click', () => {
-      if (cartPanel.classList.contains('open')) closeCartPanel(); else openCartPanel();
-    });
+
+    openCartBtn.addEventListener('click', openCartPanel);
     collapseCart.addEventListener('click', closeCartPanel);
+
+    cartPanel.addEventListener('click', (e) => {
+      if (e.target === cartPanel && isMobileView()) closeCartPanel();
+    });
 
     function getCart() {
       return JSON.parse(localStorage.getItem(CART_KEY) || '[]');
@@ -491,16 +597,6 @@
         localStorage.setItem('selectedRestaurantId', cart[0]?.restaurant_id || restaurantId);
         window.location.href = 'user-address.html';
       });
-    }
-
-    // Keep menu buttons' state in sync with panel changes
-    function syncMenuButtons() {
-      const cart = getCart();
-      document.querySelectorAll('[id^="add-btn-"]').forEach(btn => {
-        const id = Number(btn.id.replace('add-btn-',''));
-        const meta = window.__menuIndex && window.__menuIndex[id];
-        if (!meta) return;
-        const exists = cart.find(i => i.name === meta.name && i.restaurant_id === meta.restaurant_id);
         const lbl = btn.querySelector('.btn-label');
         const qtyRow = document.getElementById(`qty-row-${id}`);
         const qtyEl = document.getElementById(`qty-${id}`);
@@ -527,9 +623,111 @@
       if(typeof v === 'number') return v === 1;
       return String(v).toLowerCase().includes('veg') && !String(v).toLowerCase().includes('non');
     }
-
-    // render menu based on window.__menuFilter ('all'|'veg'|'non-veg')
     window.__menuFilter = window.__menuFilter || 'all';
+        // ===== CHECKOUT HANDLER =====
+        function proceedToCheckout() {
+          const cart = getCart();
+          if (!cart.length) return alert('Your cart is empty!');
+          localStorage.setItem('cartItems', JSON.stringify(cart));
+          localStorage.setItem('selectedRestaurantId', cart[0]?.restaurant_id || restaurantId);
+          window.location.href = 'user-address.html';
+        }
+
+        if (panelProceed) {
+          panelProceed.addEventListener('click', proceedToCheckout);
+        }
+
+        // ===== MOBILE SWIPE-TO-CHECKOUT LOGIC =====
+        const swipeSlider = document.getElementById('mobile-swipe-slider');
+        const swipeHandle = document.getElementById('swipe-handle');
+        const swipeProgress = document.getElementById('swipe-progress');
+        let isSwipeActive = false;
+        let swipeStartX = 0;
+        let sliderRect = null;
+
+        function enableSwipe() {
+          if (!isMobileView() || !swipeSlider) return;
+          swipeSlider.addEventListener('pointerdown', handleSwipeStart, { passive: false });
+          document.addEventListener('pointermove', handleSwipeMove, { passive: false });
+          document.addEventListener('pointerup', handleSwipeEnd, { passive: false });
+          document.addEventListener('pointercancel', handleSwipeEnd, { passive: false });
+        }
+
+        function disableSwipe() {
+          if (!swipeSlider) return;
+          swipeSlider.removeEventListener('pointerdown', handleSwipeStart);
+          document.removeEventListener('pointermove', handleSwipeMove);
+          document.removeEventListener('pointerup', handleSwipeEnd);
+          document.removeEventListener('pointercancel', handleSwipeEnd);
+        }
+
+        function handleSwipeStart(e) {
+          const cart = getCart();
+          if (!cart.length) { e.preventDefault(); return; }
+          isSwipeActive = true;
+          swipeStartX = e.clientX;
+          sliderRect = swipeSlider.getBoundingClientRect();
+          swipeHandle.classList.add('swiping');
+          swipeSlider.style.cursor = 'grabbing';
+          e.preventDefault();
+        }
+
+        function handleSwipeMove(e) {
+          if (!isSwipeActive || !sliderRect) return;
+          e.preventDefault();
+          const currentX = e.clientX;
+          const swipeDistance = Math.max(0, currentX - swipeStartX);
+          const sliderWidth = sliderRect.width;
+          const progress = Math.min(swipeDistance / sliderWidth, 1);
+          const maxTranslate = sliderWidth - 60;
+          const translateX = progress * maxTranslate;
+          swipeHandle.style.transform = `translateX(${translateX}px)`;
+          swipeProgress.style.opacity = Math.min(progress * 0.5, 0.3);
+          if (progress > 0.05) swipeProgress.classList.add('active');
+        }
+
+        function handleSwipeEnd(e) {
+          if (!isSwipeActive) return;
+          e.preventDefault();
+          isSwipeActive = false;
+          swipeHandle.classList.remove('swiping');
+          swipeSlider.style.cursor = 'grab';
+          const currentX = e.clientX || swipeStartX;
+          const swipeDistance = currentX - swipeStartX;
+          const sliderWidth = sliderRect.width;
+          const progress = swipeDistance / sliderWidth;
+          if (progress >= 0.7) {
+            swipeHandle.style.transform = 'translateX(0)';
+            swipeProgress.style.opacity = 0;
+            swipeProgress.classList.remove('active');
+            if (navigator.vibrate) navigator.vibrate(100);
+            closeCartPanel();
+            setTimeout(proceedToCheckout, 200);
+          } else {
+            swipeHandle.style.transition = 'transform 200ms ease';
+            swipeHandle.style.transform = 'translateX(0)';
+            swipeProgress.style.opacity = 0;
+            swipeProgress.classList.remove('active');
+            setTimeout(() => { swipeHandle.style.transition = ''; }, 200);
+          }
+        }
+
+        enableSwipe();
+        window.addEventListener('resize', () => {
+          if (!isMobileView()) disableSwipe();
+          else enableSwipe();
+        });
+
+        // Render panel on load (but keep closed)
+        document.addEventListener('DOMContentLoaded', () => {
+          renderCartPanel();
+          syncMenuButtons();
+          unlockBodyScroll();
+        });
+
+        window.addEventListener('beforeunload', () => {
+          unlockBodyScroll();
+        });
     function renderMenu(){
       const menuList = document.getElementById('menu-list');
       const emptyMsg = document.getElementById('no-dishes');

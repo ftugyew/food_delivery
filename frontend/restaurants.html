@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/animations.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
   <script src="js/auth-guard.js" defer></script>
   <script type="module" src="js/api.js"></script>
   <script type="module" src="js/script.js"></script>
@@ -41,15 +42,15 @@
   </style>
 </head>
 <body class="bg-gradient-to-br from-green-50 to-white min-h-screen">
-  <header class="bg-white/95 sticky top-0 z-50 shadow">
+  <header class="bg-white/95 sticky top-0 z-50 shadow navbar">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
-      <div class="flex items-center space-x-2 sm:space-x-3">
+      <div class="flex items-center gap-2 sm:gap-3">
         <div class="w-8 sm:w-10 h-8 sm:h-10 bg-green-600 rounded-lg flex items-center justify-center text-white font-bold text-xs sm:text-sm">T</div>
-        <h1 class="font-bold text-sm sm:text-lg md:text-xl truncate">Tindo — Restaurants</h1>
+        <h1 class="font-bold text-sm sm:text-lg md:text-xl truncate">All Restaurants</h1>
       </div>
-      <nav class="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm">
-        <a href="index.html" class="text-gray-600 hover:text-green-600 font-medium">Home</a>
-        <a href="cart.html" class="text-gray-600 hover:text-green-600 font-medium">Cart</a>
+      <nav class="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm">
+        <a href="index.html" class="nav-link flex items-center gap-1"><i data-lucide="home" class="text-green-600"></i> Home</a>
+        <a href="cart.html" class="nav-link flex items-center gap-1"><i data-lucide="shopping-cart" class="text-green-600"></i> Cart</a>
       </nav>
     </div>
   </header>
@@ -130,7 +131,7 @@ function renderAll(list){
     console.log(`🖼️ Restaurant "${r.name}" image:`, finalImageUrl);
 
     return `
-<div class="card rounded-lg sm:rounded-2xl overflow-hidden cursor-pointer transition transform group hover:shadow-lg" onclick="window.location.href='restaurant.html?id=${r.id}'">
+<div class="card hover-lift rounded-lg sm:rounded-2xl overflow-hidden cursor-pointer group" onclick="window.location.href='restaurant.html?id=${r.id}'">
   <div class="h-40 sm:h-48 relative">
     <img src="${finalImageUrl}"
          class="h-full w-full object-cover"
@@ -142,8 +143,8 @@ function renderAll(list){
     <p class="text-xs sm:text-sm text-gray-600 mb-1 truncate">${r.cuisine || 'Multi Cuisine'}</p>
     <p class="text-xs text-gray-500 mb-3 line-clamp-1">${r.address || 'Location'}</p>
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-      <span class="text-xs sm:text-sm text-green-600 font-semibold">⭐ ${r.rating || '4.0'} · ${r.eta || '30'} mins</span>
-      <a href="restaurant.html?id=${r.id}" class="btn-see text-xs sm:text-sm w-full sm:w-auto text-center px-3 py-2 sm:px-4 sm:py-2">View</a>
+      <span class="badge success">★ ${r.rating || '4.0'} · ${r.eta || '30'} mins</span>
+      <a href="restaurant.html?id=${r.id}" class="btn btn-primary btn-sm w-full sm:w-auto text-center">View</a>
     </div>
   </div>
 </div>
@@ -153,6 +154,7 @@ function renderAll(list){
 
 // Load restaurants when page is ready
 loadAllRestaurants();
+try { lucide.createIcons(); } catch(e) {}
 </script>
 </body>
 </html>
