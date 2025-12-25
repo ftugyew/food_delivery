@@ -588,28 +588,6 @@
       syncMenuButtons();
     });
 
-    if (panelProceed) {
-      panelProceed.addEventListener('click', () => {
-        const cart = getCart();
-        if (!cart.length) return alert('Your cart is empty!');
-        // reuse existing proceed behavior
-        localStorage.setItem('cartItems', JSON.stringify(cart));
-        localStorage.setItem('selectedRestaurantId', cart[0]?.restaurant_id || restaurantId);
-        window.location.href = 'user-address.html';
-      });
-        const lbl = btn.querySelector('.btn-label');
-        const qtyRow = document.getElementById(`qty-row-${id}`);
-        const qtyEl = document.getElementById(`qty-${id}`);
-        if (exists) {
-          if (lbl) lbl.textContent = 'Added to Cart';
-          if (qtyRow) qtyRow.classList.remove('hidden');
-          if (qtyEl) qtyEl.textContent = String(exists.qty);
-        } else {
-          if (lbl) lbl.textContent = 'Add to Cart';
-          if (qtyRow) qtyRow.classList.add('hidden');
-        }
-      });
-    }
 
     // Render panel on load (but keep closed)
     document.addEventListener('DOMContentLoaded', () => { renderCartPanel(); syncMenuButtons(); });
