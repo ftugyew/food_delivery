@@ -325,6 +325,10 @@
       }
       if (qtyRow) qtyRow.classList.remove('hidden');
       if (qtyEl) qtyEl.textContent = String(existing.qty || 1);
+
+      // Keep cart panel and other buttons in sync
+      renderCartPanel();
+      syncMenuButtons();
     }
 
     function changeQtyUI(dishId, delta) {
@@ -347,6 +351,10 @@
       const qtyVal = (cart.find(i => i.name === meta.name && i.restaurant_id === meta.restaurant_id) || {}).qty || 0;
       if (qtyEl) qtyEl.textContent = String(qtyVal);
       if (qtyRow && qtyVal <= 0) qtyRow.classList.add('hidden');
+
+      // Keep cart panel and other buttons in sync
+      renderCartPanel();
+      syncMenuButtons();
     }
 
     // ❤️ Like
