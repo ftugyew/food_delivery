@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tindo – Restaurant Menu</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/tailwind.css">
   <link rel="stylesheet" href="css/ui.css">
   
   <script src="js/auth-guard.js" defer></script>
@@ -137,7 +137,9 @@
   <script>
     lucide.createIcons();
     // Use API root (no trailing resource) so we can call multiple endpoints
-    const API_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com/api";
+    const API_BASE_URL = window.API_BASE_URL || "https://food-delivery-backend-cw3m.onrender.com/api";
+    const token = localStorage.getItem('token');
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
     // IMAGE_BASE_URL & PLACEHOLDER_IMAGE already defined in imageHelper.js
 
     const restaurantId = new URLSearchParams(window.location.search).get('id');
@@ -164,7 +166,7 @@
           // Fetch restaurant details from /api/restaurants/:id
           const restaurantUrl = `${API_BASE_URL}/restaurants/${id}`;
           console.log('Fetching restaurant from:', restaurantUrl);
-          const restaurantRes = await fetch(restaurantUrl);
+          const restaurantRes = await fetch(restaurantUrl, { headers: authHeaders });
           
           if (!restaurantRes.ok) {
             throw new Error(`Restaurant API Error: ${restaurantRes.status}`);
@@ -185,7 +187,7 @@
           // Fetch menu items from /api/menu/restaurant/:id
           const menuUrl = `${API_BASE_URL}/menu/restaurant/${id}`;
           console.log('Fetching menu from:', menuUrl);
-          const menuRes = await fetch(menuUrl);
+          const menuRes = await fetch(menuUrl, { headers: authHeaders });
           
           if (!menuRes.ok) {
             throw new Error(`Menu API Error: ${menuRes.status}`);
@@ -268,7 +270,10 @@
         })
         .catch(err => {
           console.error('Error fetching restaurant/menu:', err.message);
-          document.getElementById('no-dishes').textContent = 'Failed to load menu 😔';
+          const msg = err && err.message && err.message.includes('401')
+            ? 'Session expired. Please log in again to view this restaurant.'
+            : 'Failed to load menu 😔';
+          document.getElementById('no-dishes').textContent = msg;
           document.getElementById('no-dishes').classList.remove('hidden');
         });
     }

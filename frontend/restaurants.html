@@ -4,8 +4,7 @@
   <meta charset="utf-8" />
   <title>All Restaurants — Tindo</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <!-- TODO: Replace CDN Tailwind with compiled build for production deployments -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/tailwind.css">
   <link rel="stylesheet" href="css/animations.css">
   <script src="js/auth-guard.js" defer></script>
   <script type="module" src="js/api.js"></script>
@@ -49,10 +48,16 @@ import { API_BASE_URL } from "./js/config.js";
 
 async function loadAllRestaurants(){
   try{
+    const token = localStorage.getItem('token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
     console.log("🔄 Fetching restaurants from:", `${API_BASE_URL}/restaurants`);
-    const res = await fetch(`${API_BASE_URL}/restaurants`);
+    const res = await fetch(`${API_BASE_URL}/restaurants`, { headers });
     
     if (!res.ok) {
+      if (res.status === 401) {
+        throw new Error('Unauthorized — please log in again.');
+      }
       throw new Error(`HTTP error! status: ${res.status}`);
     }
     
@@ -66,7 +71,10 @@ async function loadAllRestaurants(){
     console.error('❌ Failed to load restaurants:', e);
     const container = document.getElementById('all-restaurants');
     if (container) {
-      container.innerHTML = '<p class="text-red-500 col-span-3 text-center">Failed to load restaurants. Please check your connection.</p>';
+      const message = e && e.message === 'Unauthorized — please log in again.'
+        ? '<p class="text-red-500 col-span-3 text-center">Session expired. <a class="underline text-green-700" href="login.html">Log in</a> to view restaurants.</p>'
+        : '<p class="text-red-500 col-span-3 text-center">Failed to load restaurants. Please check your connection.</p>';
+      container.innerHTML = message;
     }
   }
 }
