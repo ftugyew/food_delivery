@@ -442,9 +442,8 @@
         if (isOnline) {
           status.textContent = "🟢 Online";
           offlineMsg.classList.add("hidden");
-          if (locationPermissionGranted) {
-            loadOrders();
-          }
+          // Load orders when going online (location permission not required)
+          loadOrders();
         } else {
           status.textContent = "🔴 Offline";
           offlineMsg.classList.remove("hidden");
@@ -460,10 +459,8 @@
         if (onlineStatusLabel) onlineStatusLabel.textContent = isOnline ? 'Online' : 'Offline';
       });
       
-      // Load orders immediately if location permission granted
-      if (locationPermissionGranted) {
-        loadOrders();
-      }
+      // Load orders immediately (location permission not required for viewing orders)
+      loadOrders();
 
       // Socket connection
       socket.on("connect", () => {
@@ -482,7 +479,7 @@
       socket.on(`agent_${agentId}_order`, (data) => {
         console.log("🔔 New order notification:", data);
         showNotification(`New order assigned: #${data.order.id || data.order_id}`);
-        if (isOnline && locationPermissionGranted) {
+        if (isOnline) {
           loadOrders();
         }
       });
@@ -492,7 +489,7 @@
         console.log("📢 NEW ORDER BROADCAST:", order);
         showOrderModal(order);
         playOrderSound();
-        if (isOnline && locationPermissionGranted) {
+        if (isOnline) {
           loadOrders();
         }
       });
@@ -777,10 +774,15 @@
     // LOAD ORDERS
     // ============================================
     async function loadOrders() {
-      // Don't load orders if offline or no location permission
-      if (!isOnline || !locationPermissionGranted) {
-        console.log("Cannot load orders: offline or no location permission");
+      // Don't load orders if offline
+      if (!isOnline) {
+        console.log("Cannot load orders: agent is offline");
         return;
+      }
+      
+      // Warn if no location permission but continue loading orders
+      if (!locationPermissionGranted) {
+        console.warn("⚠️ Location permission not granted - orders will load but live tracking disabled");
       }
 
       try {
@@ -815,6 +817,16 @@
         const orders = await res.json();
         cachedOrders = orders || [];
         console.log("📦 Loaded orders:", orders);
+        console.log(`📊 Total orders received: ${orders.length}`);
+        
+        // Debug: Show order statuses
+        if (orders.length > 0) {
+          const statusCounts = {};
+          orders.forEach(o => {
+            statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
+          });
+          console.log("📋 Orders by status:", statusCounts);
+        }
 
         // Filter orders: available (no agent or assigned to this agent)
         const availableOrders = cachedOrders.filter(o => 
@@ -827,6 +839,12 @@
           o.status !== 'Delivered' && 
           o.status !== 'Cancelled'
         );
+
+        console.log(`📋 Filtered results - Available: ${availableOrders.length}, Active: ${activeOrders.length}`);
+        
+        if (availableOrders.length > 0) {
+          console.log("Available orders:", availableOrders.map(o => ({id: o.id, status: o.status, agent_id: o.agent_id})));
+        }
 
         animateCount('availableCount', availableOrders.length);
         animateCount('activeCount', activeOrders.length);
@@ -870,6 +888,8 @@
     // ============================================
     function renderOrders(orders) {
       const list = document.getElementById("ordersList");
+      
+      console.log(`🎨 Rendering ${orders?.length || 0} orders to the UI`);
       
       if (!orders || orders.length === 0) {
         list.innerHTML = '<p class="text-gray-500">No available orders at the moment. New orders will appear here automatically.</p>';
