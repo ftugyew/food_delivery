@@ -99,10 +99,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   console.log("Placing order with data:", orderData);
 
   try {
-    // FIXED: Removed duplicate /api (already in API_BASE_URL)
+    // Get auth token
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("⚠️ Please log in to place an order");
+      window.location.href = "login.html";
+      return;
+    }
+
+    // FIXED: Removed duplicate /api (already in API_BASE_URL) + Added Authorization header
     const res = await fetch(`${API_BASE_URL}/orders`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
       body: JSON.stringify(orderData)
     });
 
