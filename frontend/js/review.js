@@ -1,7 +1,8 @@
 // Tindo Reviews: 5-star modal for order rating
 (function(){
   // Use shared API base URL from api.js (also exposed on window)
-  const API_BASE_URL = window.API_BASE_URL || 'https://food-delivery-backend-cw3m.onrender.com';
+  // Fallback includes '/api' so paths below don't double-prefix
+  const API_BASE_URL = window.API_BASE_URL || 'https://food-delivery-backend-cw3m.onrender.com/api';
   const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function el(html){ const d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstElementChild; }
@@ -66,7 +67,7 @@
     const comment = m.querySelector('#reviewComment').value.trim();
     if (!rating || rating < 1){ alert('Please select a rating'); return; }
     try{
-      const res = await fetch(`${API_BASE_URL}/api/orders/${encodeURIComponent(orderId)}/review`,{
+      const res = await fetch(`${API_BASE_URL}/orders/${encodeURIComponent(orderId)}/review`,{
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ rating, comment })
       });

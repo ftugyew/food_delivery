@@ -342,8 +342,9 @@
   </div>
 
   <script>
-    const API_BASE_URL = "https://food-delivery-backend-cw3m.onrender.com/api";
-    const socket = io("https://food-delivery-backend-cw3m.onrender.com");
+    const API_BASE_URL = window.API_BASE_URL || "https://food-delivery-backend-cw3m.onrender.com/api";
+    const SOCKET_URL = API_BASE_URL.replace(/\/api$/, "");
+    const socket = io(SOCKET_URL);
 
     let agentId = null;
     let currentOrderId = null;

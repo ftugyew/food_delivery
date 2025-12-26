@@ -196,7 +196,8 @@
     }
 
     try {
-      const res = await fetch(`https://food-delivery-backend-cw3m.onrender.com/api/auth/login`, {
+      const API_BASE_URL = window.API_BASE_URL || "https://food-delivery-backend-cw3m.onrender.com/api";
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
@@ -283,7 +284,8 @@
     const phone = document.getElementById("phone_input").value.trim().replace(/\D/g,'');
     if(!phone || phone.length < 10) return alert("Enter valid phone");
     try {
-      const res = await fetch(`https://food-delivery-backend-cw3m.onrender.com/api/otp/send`, {
+      const API_BASE_URL = window.API_BASE_URL || "https://food-delivery-backend-cw3m.onrender.com/api";
+      const res = await fetch(`${API_BASE_URL}/otp/send`, {
         method:"POST", 
         headers:{ "Content-Type":"application/json" }, 
         body: JSON.stringify({ phone })
@@ -303,7 +305,8 @@
     const phone = document.getElementById("phone_input").value.trim().replace(/\D/g,'');
     const otp = document.getElementById("otp_input").value.trim();
     try{
-      const res = await fetch(`https://food-delivery-backend-cw3m.onrender.com/api/otp/verify`, {
+      const API_BASE_URL = window.API_BASE_URL || "https://food-delivery-backend-cw3m.onrender.com/api";
+      const res = await fetch(`${API_BASE_URL}/otp/verify`, {
         method:"POST", 
         headers:{ "Content-Type":"application/json" }, 
         body: JSON.stringify({ phone, otp })

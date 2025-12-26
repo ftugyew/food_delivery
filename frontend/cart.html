@@ -65,7 +65,7 @@
   </footer>
 
   <script>
-    const BASE = "https://food-delivery-backend-cw3m.onrender.com";
+    const API_BASE_URL = window.API_BASE_URL || "https://food-delivery-backend-cw3m.onrender.com/api";
     // Load cart items from localStorage
     const cartItemsContainer = document.getElementById('cart-items');
     const subtotalEl = document.getElementById('subtotal');

@@ -3,7 +3,9 @@
  * Manages real-time order updates, location tracking, and notifications
  */
 
-const BACKEND_URL = "https://food-delivery-backend-cw3m.onrender.com";
+const BACKEND_URL = (typeof window !== 'undefined' && window.API_BASE_URL)
+  ? window.API_BASE_URL.replace(/\/api$/, '')
+  : "https://food-delivery-backend-cw3m.onrender.com";
 
 // Initialize socket connection
 const socket = io(BACKEND_URL, {

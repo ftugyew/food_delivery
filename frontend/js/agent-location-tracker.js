@@ -5,7 +5,7 @@
  */
 
 class AgentLocationTracker {
-  constructor(apiBaseUrl = 'https://food-delivery-backend-cw3m.onrender.com/api') {
+  constructor(apiBaseUrl = (typeof window !== 'undefined' && window.API_BASE_URL) ? window.API_BASE_URL : 'https://food-delivery-backend-cw3m.onrender.com/api') {
     this.apiBaseUrl = apiBaseUrl;
     this.isTracking = false;
     this.updateInterval = 7000; // 7 seconds

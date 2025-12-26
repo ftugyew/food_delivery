@@ -83,7 +83,7 @@
 
 <!-- Your main script should start AFTER that -->
 <script>
-const BASE = "https://food-delivery-backend-cw3m.onrender.com";
+const API_BASE_URL = window.API_BASE_URL || "https://food-delivery-backend-cw3m.onrender.com/api";
 let map, marker;
 let userLat = 17.385, userLng = 78.4867;
 
@@ -179,7 +179,7 @@ async function detectLiveLocation() {
 // 🔄 Reverse Geocode via backend
 async function reverseGeocode(lat, lng) {
   try {
-    const res = await fetch(`${BASE}/api/mappls/reverse-geocode?lat=${lat}&lng=${lng}`);
+    const res = await fetch(`${API_BASE_URL}/mappls/reverse-geocode?lat=${lat}&lng=${lng}`);
     const data = await res.json();
     if (data.success && data.address) {
       const a = data.address;
@@ -193,7 +193,8 @@ async function reverseGeocode(lat, lng) {
 }
 
 // 🔌 Socket.IO
-const socket = io("https://food-delivery-backend-cw3m.onrender.com");
+const SOCKET_URL = API_BASE_URL.replace(/\/api$/, "");
+const socket = io(SOCKET_URL);
 socket.on("connect", () => console.log("✅ Socket connected:", socket.id));
 socket.on("pong-check", () => console.log("✅ Server ping OK"));
 socket.on("connect_error", (err) => console.error("❌ Socket error:", err.message));

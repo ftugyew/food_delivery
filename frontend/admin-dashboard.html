@@ -247,8 +247,9 @@
 </div>
 
 <script>
-const BASE = "https://food-delivery-backend-cw3m.onrender.com";
-const socket = io(BASE);
+const API_BASE_URL = window.API_BASE_URL || "https://food-delivery-backend-cw3m.onrender.com/api";
+const SOCKET_URL = API_BASE_URL.replace(/\/api$/, "");
+const socket = io(SOCKET_URL);
 
 // When socket connects, ensure map is seeded with restaurants and current delivery agents
 socket.on('connect', () => {

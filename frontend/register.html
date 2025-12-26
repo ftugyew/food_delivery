@@ -284,7 +284,8 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
       formData.append("vehicle_type", vehicle);
     }
 
-    const res = await fetch("https://food-delivery-backend-cw3m.onrender.com/api/auth/register", {
+    const API_BASE_URL = window.API_BASE_URL || "https://food-delivery-backend-cw3m.onrender.com/api";
+    const res = await fetch(`${API_BASE_URL}/auth/register`, {
       method: "POST",
       body: formData,
     });
