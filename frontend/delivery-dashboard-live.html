@@ -1375,8 +1375,10 @@
         if (res.ok) {
           showNotification("✅ Message sent to customer");
           lastMessage = msg;
-          document.getElementById('chatPreviewMsg')?.textContent = msg;
-          document.getElementById('chatPreviewPanel')?.textContent = msg;
+          const chatPreviewMsg = document.getElementById('chatPreviewMsg');
+          if (chatPreviewMsg) chatPreviewMsg.textContent = msg;
+          const chatPreviewPanel = document.getElementById('chatPreviewPanel');
+          if (chatPreviewPanel) chatPreviewPanel.textContent = msg;
         } else {
           showNotification("❌ Failed to send message");
         }
@@ -1674,7 +1676,8 @@
       });
       const statusBadge = document.getElementById('profileStatusBadge');
       if (statusBadge) statusBadge.textContent = isOnline ? 'Online' : 'Offline';
-      document.getElementById('chatPreviewMsg')?.textContent = lastMessage;
+      const chatPreviewMsg = document.getElementById('chatPreviewMsg');
+      if (chatPreviewMsg) chatPreviewMsg.textContent = lastMessage;
     }
 
     // ============================================
