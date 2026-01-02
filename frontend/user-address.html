@@ -134,7 +134,7 @@ async function detectLiveLocation() {
   console.log("📍 Detecting your location...");
 
   navigator.geolocation.getCurrentPosition(
-    (position) => {
+    async (position) => {
       userLat = position.coords.latitude;
       userLng = position.coords.longitude;
       console.log(`✅ Location detected: ${userLat}, ${userLng}`);
@@ -150,6 +150,9 @@ async function detectLiveLocation() {
 
       // Fetch address from coordinates
       reverseGeocode(userLat, userLng);
+      
+      // ⭐ CRITICAL: Save location to users table for order placement
+      await saveLocationToUsersTable(userLat, userLng);
     },
     (error) => {
       switch (error.code) {
@@ -175,6 +178,68 @@ async function detectLiveLocation() {
   );
 }
 
+
+// ⭐ CRITICAL: Save location to users table for order placement
+async function saveLocationToUsersTable(lat, lng) {
+  try {
+    // Get user_id from localStorage (set during login)
+    const userId = localStorage.getItem('tindo_user_id');
+    
+    if (!userId) {
+      console.warn('⚠️ No user_id found in localStorage. Location not saved to users table.');
+      console.warn('User must log in first to save location.');
+      return;
+    }
+
+    // Build full address from form fields (if available)
+    const house = document.getElementById('house')?.value || '';
+    const street = document.getElementById('street')?.value || '';
+    const city = document.getElementById('city')?.value || '';
+    const state = document.getElementById('state')?.value || '';
+    const pincode = document.getElementById('pincode')?.value || '';
+    
+    const fullAddress = [house, street, city, state, pincode]
+      .filter(Boolean)
+      .join(', ');
+
+    console.log(`📍 Saving location to users table for user ${userId}...`);
+    
+    const response = await fetch(`${API_BASE_URL}/users/location`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('tindo_token') || ''}`
+      },
+      body: JSON.stringify({
+        user_id: parseInt(userId),
+        lat: lat,
+        lng: lng,
+        address: fullAddress || null
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('✅ Location saved to users table successfully:', data);
+      
+      // Show success message to user
+      const successMsg = document.createElement('div');
+      successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
+      successMsg.textContent = '✅ Location saved! You can now place orders.';
+      document.body.appendChild(successMsg);
+      
+      setTimeout(() => successMsg.remove(), 3000);
+    } else {
+      console.error('❌ Failed to save location:', data);
+      
+      // Show error message
+      alert(`⚠️ Failed to save location: ${data.error || data.message || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error('❌ Error saving location to users table:', error);
+  }
+}
 
 // 🔄 Reverse Geocode via backend
 async function reverseGeocode(lat, lng) {
@@ -262,6 +327,10 @@ async function onConfirmAddress(e) {
       alert('Please fill all required fields');
       return;
     }
+
+    // ⭐ CRITICAL: Save location to users table BEFORE saving address
+    const fullAddress = [house, street, city, state, pincode].filter(Boolean).join(', ');
+    await saveLocationToUsersTable(userLat, userLng, fullAddress);
 
     const address = {
       name, phone, email, pincode, house, street, landmark, city, state, country, address_type,
