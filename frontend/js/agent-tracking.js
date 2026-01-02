@@ -11,7 +11,7 @@
  */
 
 class AgentLocationTracker {
-    constructor(agentId, orderId, token, socketUrl = 'http://localhost:5000') {
+    constructor(agentId, orderId, token, socketUrl = 'https://food-delivery-backend-cw3m.onrender.com') {
         this.agentId = agentId;
         this.orderId = orderId;
         this.token = token;
@@ -224,7 +224,7 @@ class AgentLocationTracker {
      */
     async sendLocationToAPI(locationData) {
         try {
-            const response = await fetch('http://localhost:5000/api/tracking/agent-location', {
+            const response = await fetch('https://food-delivery-backend-cw3m.onrender.com/api/tracking/agent-location', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

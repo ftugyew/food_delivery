@@ -9,7 +9,7 @@
  * captureUserLocation(userId, token);
  */
 
-const USER_LOCATION_API = 'http://localhost:5000/api/auth/update-location';
+const USER_LOCATION_API = 'https://food-delivery-backend-cw3m.onrender.com/api/auth/update-location';
 
 /**
  * Request location permission and capture coordinates
