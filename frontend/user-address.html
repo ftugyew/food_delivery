@@ -184,10 +184,18 @@ async function saveLocationToUsersTable(lat, lng) {
   try {
     // Get user_id from localStorage (set during login)
     const userId = localStorage.getItem('tindo_user_id');
+    const token = localStorage.getItem('tindo_token');
     
     if (!userId) {
-      console.warn('⚠️ No user_id found in localStorage. Location not saved to users table.');
-      console.warn('User must log in first to save location.');
+      console.error('❌ No user_id found in localStorage');
+      alert('⚠️ Please log in first to save your location');
+      return;
+    }
+
+    if (!token) {
+      console.error('❌ No authentication token found');
+      alert('⚠️ Authentication required. Please log in again.');
+      window.location.href = '/login.html';
       return;
     }
 
@@ -202,30 +210,35 @@ async function saveLocationToUsersTable(lat, lng) {
       .filter(Boolean)
       .join(', ');
 
-    console.log(`📍 Saving location to users table for user ${userId}...`);
+    const payload = {
+      user_id: parseInt(userId),
+      lat: lat,
+      lng: lng,
+      address: fullAddress || null
+    };
+
+    console.log(`📍 Saving location to users table for user ${userId}...`, payload);
     
     const response = await fetch(`${API_BASE_URL}/users/location`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('tindo_token') || ''}`
+        'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({
-        user_id: parseInt(userId),
-        lat: lat,
-        lng: lng,
-        address: fullAddress || null
-      })
+      body: JSON.stringify(payload)
     });
 
+    console.log(`📡 Response status: ${response.status} ${response.statusText}`);
+    
     const data = await response.json();
+    console.log('📦 Response data:', data);
 
     if (response.ok) {
       console.log('✅ Location saved to users table successfully:', data);
       
       // Show success message to user
       const successMsg = document.createElement('div');
-      successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
+      successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded shadow-lg z-50 font-semibold';
       successMsg.textContent = '✅ Location saved! You can now place orders.';
       document.body.appendChild(successMsg);
       
@@ -233,11 +246,13 @@ async function saveLocationToUsersTable(lat, lng) {
     } else {
       console.error('❌ Failed to save location:', data);
       
-      // Show error message
-      alert(`⚠️ Failed to save location: ${data.error || data.message || 'Unknown error'}`);
+      // Show detailed error
+      const errorMsg = data.error || data.message || 'Unknown error';
+      alert(`⚠️ Failed to save location:\n\n${errorMsg}\n\nPlease try again or contact support.`);
     }
   } catch (error) {
     console.error('❌ Error saving location to users table:', error);
+    alert(`⚠️ Network error: ${error.message}\n\nPlease check your internet connection and try again.`);
   }
 }
 

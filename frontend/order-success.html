@@ -99,12 +99,44 @@ document.addEventListener("DOMContentLoaded", async () => {
   console.log("Placing order with data:", orderData);
 
   try {
-    // Get auth token
+    // Get auth token and user_id
     const token = localStorage.getItem("token");
+    const userId = localStorage.getItem("tindo_user_id");
+    
     if (!token) {
       alert("⚠️ Please log in to place an order");
       window.location.href = "login.html";
       return;
+    }
+
+    // ⭐ CRITICAL: Verify user has location saved before placing order
+    if (userId) {
+      console.log(`🔍 Verifying location for user ${userId}...`);
+      
+      try {
+        const locationCheck = await fetch(`${API_BASE_URL}/users/${userId}/location`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        
+        if (locationCheck.ok) {
+          const locationData = await locationCheck.json();
+          
+          // Check both formats: {user: {lat, lng}} or {location: {lat, lng}}
+          const userLoc = locationData.user || locationData.location;
+          
+          if (!userLoc || !userLoc.lat || !userLoc.lng) {
+            console.error('❌ User location not set in database');
+            alert('⚠️ Please set your delivery location first!\n\nGo to: Menu → User Address → Detect My Location');
+            window.location.href = 'user-address.html';
+            return;
+          }
+          
+          console.log('✅ User location verified:', userLoc);
+        }
+      } catch (locErr) {
+        console.warn('⚠️ Could not verify location:', locErr);
+        // Continue anyway - let backend validation handle it
+      }
     }
 
     // FIXED: Removed duplicate /api (already in API_BASE_URL) + Added Authorization header
@@ -122,8 +154,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Check if response is OK before parsing JSON
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("API Error Response:", errorText);
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: errorText };
+      }
+      
+      console.error("API Error Response:", errorData);
+      
+      // Special handling for location missing error
+      if (errorData.error === "Delivery location missing") {
+        alert('⚠️ Delivery location not set!\n\nPlease go to User Address page and set your delivery location first.');
+        window.location.href = 'user-address.html';
+        return;
+      }
+      
+      throw new Error(`HTTP ${res.status}: ${errorData.error || res.statusText}`);
     }
 
     const data = await res.json();
