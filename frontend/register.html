@@ -236,16 +236,12 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
     return;
   }
 
-  // DEFAULT → CUSTOMER
-  if (!role) role = "customer";
+  if (!role) role = "customer"; // default
 
   try {
-    const formData = new FormData();
-    formData.append("name", name);
-    formData.append("email", email);
-    formData.append("password", password);
-    formData.append("phone", phone);
-    formData.append("role", role);
+    const API_BASE_URL = window.API_BASE_URL || "https://food-delivery-backend-cw3m.onrender.com/api";
+    let endpoint = `${API_BASE_URL}/auth/register`;
+    let options;
 
     if (role === "restaurant") {
       const restaurantName = document.getElementById("restaurant_name_input").value.trim();
@@ -264,37 +260,50 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
         return;
       }
 
+      endpoint = `${API_BASE_URL}/auth/register-restaurant`;
+      const formData = new FormData();
+      formData.append("name", name);
+      formData.append("email", email);
+      formData.append("password", password);
+      formData.append("phone", phone);
+      formData.append("role", role);
       formData.append("restaurant_name", restaurantName);
       formData.append("cuisine", cuisine);
       formData.append("description", description);
       formData.append("eta", eta);
-      formData.append("restaurantImage", photoFile);
-    }
+      formData.append("photo", photoFile); // backend expects `photo`
+      options = { method: "POST", body: formData };
+    } else {
+      const payload = { name, email, phone, password, role };
 
-    if (role === "delivery_agent") {
-      const aadhar = document.getElementById("aadhar_input").value.trim();
-      const vehicle = document.getElementById("vehicle_type_input").value;
+      if (role === "delivery_agent") {
+        const aadhar = document.getElementById("aadhar_input").value.trim();
+        const vehicle = document.getElementById("vehicle_type_input").value;
 
-      if (!/^\d{12}$/.test(aadhar)) {
-        alert("Invalid Aadhar number");
-        return;
+        if (!/^\d{12}$/.test(aadhar)) {
+          alert("Invalid Aadhar number");
+          return;
+        }
+
+        payload.aadhar = aadhar;
+        payload.vehicle_type = vehicle;
       }
 
-      formData.append("aadhar", aadhar);
-      formData.append("vehicle_type", vehicle);
+      options = {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      };
     }
 
-    const API_BASE_URL = window.API_BASE_URL || "https://food-delivery-backend-cw3m.onrender.com/api";
-    const res = await fetch(`${API_BASE_URL}/auth/register`, {
-      method: "POST",
-      body: formData,
-    });
-
+    const res = await fetch(endpoint, options);
     const json = await res.json();
     console.log("Response:", json);
 
-    if (res.ok && json.success) {
-      alert(json.message);
+    if (res.ok) {
+      const isRestaurant = role === "restaurant";
+      const pendingMsg = "Restaurant submitted. Please wait for admin approval in admin-dashboard before logging in.";
+      alert(json.message || (isRestaurant ? pendingMsg : "Registration submitted. Please login."));
       window.location.href = "login.html";
     } else {
       alert(json.error || "Registration failed");
