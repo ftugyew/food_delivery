@@ -297,7 +297,19 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
     }
 
     const res = await fetch(endpoint, options);
-    const json = await res.json();
+
+    let json = null;
+    try {
+      json = await res.clone().json();
+    } catch (parseErr) {
+      const text = await res.text();
+      console.error("Non-JSON response:", text);
+      alert(res.status === 404
+        ? "Registration endpoint not found (404). Please check backend deploy."
+        : "Server returned an unexpected response. Please try again.");
+      return;
+    }
+
     console.log("Response:", json);
 
     if (res.ok) {
