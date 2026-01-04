@@ -384,6 +384,50 @@
         window.location.href = "login.html";
         return;
       }
+
+          // ============================================
+          // FETCH AVAILABLE ORDERS (REST API FALLBACK)
+          // ============================================
+          async function fetchAvailableOrders() {
+            if (!isOnline) return;
+      
+            try {
+              const token = localStorage.getItem("token");
+              if (!token) return;
+        
+              const res = await fetch(`${API_BASE_URL}/delivery/orders/available`, {
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Content-Type": "application/json"
+                }
+              });
+        
+              if (res.ok) {
+                const availableOrders = await res.json();
+                console.log(`📦 REST API: Found ${availableOrders.length} available orders`);
+          
+                // Merge with cached orders if needed
+                if (availableOrders.length > 0) {
+                  availableOrders.forEach(newOrder => {
+                    const exists = cachedOrders.find(o => o.id === newOrder.id);
+                    if (!exists) {
+                      console.log(`➕ Adding new available order #${newOrder.id} from REST API`);
+                      cachedOrders.push(newOrder);
+                    }
+                  });
+            
+                  // Re-render if we found new orders
+                  const availableForAgent = cachedOrders.filter(o => 
+                    !o.agent_id || o.agent_id === agentId
+                  );
+                  animateCount('availableCount', availableForAgent.length);
+                  renderOrders(availableForAgent);
+                }
+              }
+            } catch (err) {
+              console.warn("Failed to fetch available orders:", err);
+            }
+          }
       // Resolve agentId via backend mapping
       try {
         const resAgent = await fetch(`${API_BASE_URL}/delivery/by-user/${user.id}`, {
@@ -461,14 +505,23 @@
       });
       
       // Load orders immediately (location permission not required for viewing orders)
+      
+        // FALLBACK: Also fetch available orders via REST API
+        fetchAvailableOrders();
+      
+        // Poll for available orders every 30 seconds as fallback
+        setInterval(fetchAvailableOrders, 30000);
       loadOrders();
 
       // Socket connection
       socket.on("connect", () => {
         console.log("✅ Connected to server");
+          console.log("🔌 Socket ID:", socket.id);
+          console.log("🛵 Agent ID:", agentId);
         document.getElementById("trackingStatus").textContent = "Online";
         // Join agent-specific room
         socket.emit("join", { type: "agent", id: agentId });
+        console.log("📤 Sent join request to server");
       });
 
       socket.on("disconnect", () => {
@@ -516,6 +569,18 @@
         console.log("📢 New available order for all agents:", data);
         showNotification(`New order available: #${data.orderId || data.id}`);
         if (isOnline && locationPermissionGranted) {
+
+                // Listen for new_order_for_agents (alternative event name)
+                socket.on("new_order_for_agents", (data) => {
+                  console.log("🚴 NEW DELIVERY ORDER RECEIVED:", data);
+                  showNotification(`🚴 New delivery request: Order #${data.id || data.orderId}`);
+                  playOrderSound();
+                  if (isOnline) {
+                    loadOrders();
+                    // Also show modal for immediate action
+                    showOrderModal(data);
+                  }
+                });
           loadOrders();
         }
       });
