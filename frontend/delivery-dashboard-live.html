@@ -395,7 +395,7 @@
               const token = localStorage.getItem("token");
               if (!token) return;
         
-              const res = await fetch(`${API_BASE_URL}/delivery/orders/available`, {
+const res = await fetch(`${API_BASE_URL}/delivery/orders/agent/available`, {
                 headers: {
                   "Authorization": `Bearer ${token}`,
                   "Content-Type": "application/json"
@@ -519,13 +519,13 @@
           console.log("🔌 Socket ID:", socket.id);
           console.log("🛵 Agent ID:", agentId);
         document.getElementById("trackingStatus").textContent = "Online";
-        // Join agent-specific room
-        socket.emit("join", { type: "agent", id: agentId });
-        console.log("📤 Sent join request to server");
+        // Register agent identity and join agents room on every (re)connect
+        socket.emit("register_agent", agentId);
+        console.log("📤 Sent register_agent to server");
       });
 
       socket.on("disconnect", () => {
-        console.log("❌ Disconnected");
+        console.log("❌ Disconnected", socket.id);
         document.getElementById("trackingStatus").textContent = "Offline";
       });
 
@@ -569,19 +569,19 @@
         console.log("📢 New available order for all agents:", data);
         showNotification(`New order available: #${data.orderId || data.id}`);
         if (isOnline && locationPermissionGranted) {
-
-                // Listen for new_order_for_agents (alternative event name)
-                socket.on("new_order_for_agents", (data) => {
-                  console.log("🚴 NEW DELIVERY ORDER RECEIVED:", data);
-                  showNotification(`🚴 New delivery request: Order #${data.id || data.orderId}`);
-                  playOrderSound();
-                  if (isOnline) {
-                    loadOrders();
-                    // Also show modal for immediate action
-                    showOrderModal(data);
-                  }
-                });
           loadOrders();
+        }
+      });
+
+      // Listen for new_order_for_agents (primary delivery event)
+      socket.on("new_order_for_agents", (data) => {
+        console.log("🚴 NEW DELIVERY ORDER RECEIVED:", data);
+        showNotification(`🚴 New delivery request: Order #${data.id || data.orderId}`);
+        playOrderSound();
+        if (isOnline) {
+          loadOrders();
+          // Also show modal for immediate action
+          showOrderModal(data);
         }
       });
 
