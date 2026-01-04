@@ -84,6 +84,7 @@
 <!-- Your main script should start AFTER that -->
 <script>
 const API_BASE_URL = window.API_BASE_URL || "https://food-delivery-backend-cw3m.onrender.com/api";
+const BASE = API_BASE_URL;
 let map, marker;
 let userLat = 17.385, userLng = 78.4867;
 
@@ -183,12 +184,23 @@ async function detectLiveLocation() {
 async function saveLocationToUsersTable(lat, lng) {
   try {
     // Get user_id from localStorage (set during login)
-    const userId = localStorage.getItem('tindo_user_id');
-    const token = localStorage.getItem('tindo_token');
+    const userStr = localStorage.getItem('user');
+    const token = localStorage.getItem('token');
+    
+    if (!userStr) {
+      console.error('❌ No user found in localStorage');
+      alert('⚠️ Please log in first to save your location');
+      window.location.href = 'login.html';
+      return;
+    }
+    
+    const user = JSON.parse(userStr);
+    const userId = user.id || user._id;
     
     if (!userId) {
-      console.error('❌ No user_id found in localStorage');
+      console.error('❌ No user_id found in user object');
       alert('⚠️ Please log in first to save your location');
+      window.location.href = 'login.html';
       return;
     }
 
@@ -393,7 +405,7 @@ function loadSavedAddresses() {
   const container = document.getElementById('savedList');
   container.innerHTML = '';
   // Try backend first
-  fetch(`${BASE}/api/user-addresses`).then(r => r.json()).then(data => {
+  fetch(`${BASE}/user-addresses`).then(r => r.json()).then(data => {
     if (Array.isArray(data) && data.length) {
       data.forEach(a => {
         const el = document.createElement('div');
