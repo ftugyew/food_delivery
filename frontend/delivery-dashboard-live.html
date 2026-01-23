@@ -1734,8 +1734,6 @@
     }
 
     function hydrateProfile(agentObj, user) {
-
-      appendNotification(message);
       const name = agentObj?.name || user?.name || 'Agent';
       const phone = agentObj?.phone || user?.phone || '--';
       const vehicle = agentObj?.vehicle_type || agentObj?.vehicle || 'Bike / Scooter';
