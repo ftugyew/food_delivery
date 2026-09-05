@@ -337,12 +337,12 @@ const safeRequire = (p) => {
 };
 
 // Load optional route modules (they may be absent in local dev)
-const authRoutes = safeRequire('./backend/routes/auth');
-const orderRoutes = safeRequire('./backend/routes/orders');
-const paymentRoutes = safeRequire('./backend/routes/payments');
-const trackingRoutes = safeRequire('./backend/routes/tracking');
-const userAddressesRoutes = safeRequire('./backend/routes/user-addresses');
-const deliveryRoutes = safeRequire('./backend/routes/delivery');
+const authRoutes = safeRequire('../backend/routes/auth');
+const orderRoutes = safeRequire('../backend/routes/orders');
+const paymentRoutes = safeRequire('../backend/routes/payments');
+const trackingRoutes = safeRequire('../backend/routes/tracking');
+const userAddressesRoutes = safeRequire('../backend/routes/user-addresses');
+const deliveryRoutes = safeRequire('../backend/routes/delivery');
 
 
 
