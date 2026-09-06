@@ -1,5 +1,7 @@
 /* js/scripts.js */
-const SERVER = "http://localhost:5000"; // change if your backend runs elsewhere
+const SERVER = (typeof window.TINDO_API_BASE !== "undefined")
+  ? (window.TINDO_API_BASE || window.location.origin)
+  : "http://localhost:5000";
 
 // ---------- Auth helpers ----------
 function getUser(){

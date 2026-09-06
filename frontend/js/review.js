@@ -1,6 +1,8 @@
 // Tindo Reviews: 5-star modal for order rating
 (function(){
-  const BASE = 'http://localhost:5000';
+  const BASE = (typeof window.TINDO_API_BASE !== "undefined")
+    ? (window.TINDO_API_BASE || window.location.origin)
+    : 'http://localhost:5000';
   const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function el(html){ const d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstElementChild; }

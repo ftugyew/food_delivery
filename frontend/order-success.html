@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Order Success – FoodieX</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/api-config.js"></script>
   <script src="assets/js/redirect-to-localhost.js"></script>
   <link rel="stylesheet" href="css/ui.css">
   <script src="js/ui.js" defer></script>
@@ -88,7 +89,9 @@
   </div>
 
   <script>
-const BASE = "http://localhost:5000";
+const BASE = (typeof window.TINDO_API_BASE !== "undefined")
+  ? (window.TINDO_API_BASE || window.location.origin)
+  : "http://localhost:5000";
 document.addEventListener("DOMContentLoaded", async () => {
   const orderData = JSON.parse(localStorage.getItem("currentOrder"));
   if (!orderData) {

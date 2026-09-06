@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>User Address Entry | Tindo / VYNK</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/api-config.js"></script>
   <!-- Mappls Advanced Maps SDK (unified key) -->
   <script src="https://apis.mappls.com/advancedmaps/api/4fa2b3a7ff1eb85c0396d26f4060f70c/map_sdk?v=3.0&layer=vector"></script>
   <style>
@@ -83,7 +84,9 @@
 
 <!-- Your main script should start AFTER that -->
 <script>
-const BASE = "http://localhost:5000";
+const BASE = (typeof window.TINDO_API_BASE !== "undefined")
+  ? (window.TINDO_API_BASE || window.location.origin)
+  : "http://localhost:5000";
 let map, marker;
 let userLat = 17.385, userLng = 78.4867;
 
@@ -193,7 +196,7 @@ async function reverseGeocode(lat, lng) {
 }
 
 // 🔌 Socket.IO
-const socket = io("http://localhost:5000");
+const socket = io(BASE);
 socket.on("connect", () => console.log("✅ Socket connected:", socket.id));
 socket.on("pong-check", () => console.log("✅ Server ping OK"));
 socket.on("connect_error", (err) => console.error("❌ Socket error:", err.message));

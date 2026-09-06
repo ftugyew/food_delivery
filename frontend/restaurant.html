@@ -6,6 +6,7 @@
   <title>Tindo – Restaurant Menu</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/ui.css">
+  <script src="js/api-config.js"></script>
   <script src="assets/js/redirect-to-localhost.js"></script>
   <script src="js/wish.js" defer></script>
   <link rel="stylesheet" href="css/animations.css">
@@ -132,7 +133,9 @@
   </footer>
 
   <script>
-    const BASE = "http://localhost:5000";
+    const BASE = (typeof window.TINDO_API_BASE !== "undefined")
+      ? window.TINDO_API_BASE
+      : "http://localhost:5000";
     lucide.createIcons();
 
     const restaurantId = new URLSearchParams(window.location.search).get('id');

@@ -80,7 +80,9 @@ function updateProgress() {
 const timer = setInterval(updateProgress, 60000); // 1 min
 
 // Live updates via Socket.io
-const BASE_URL = "http://localhost:5000"; // Express backend
+const BASE_URL = (typeof window.TINDO_API_BASE !== "undefined")
+  ? (window.TINDO_API_BASE || window.location.origin)
+  : "http://localhost:5000";
 const socket = io(BASE_URL);
 socket.emit("trackOrder", { orderId: "ORD123" });
 

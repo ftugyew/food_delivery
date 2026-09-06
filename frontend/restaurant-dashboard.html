@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tindo Restaurant Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/api-config.js"></script>
   <script src="assets/js/redirect-to-localhost.js"></script>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -168,10 +169,10 @@
 <div id="toast"></div>
 
 <script>
-const API_BASE_URL = window.API_BASE_URL && !window.API_BASE_URL.includes("localhost:5000")
-  ? window.API_BASE_URL
-  : "https://food-delivery-backend-cw3m.onrender.com/api";
-const BASE = API_BASE_URL.replace(/\/api\/?$/, "");
+const API_BASE_URL = (typeof window.TINDO_API_BASE !== "undefined")
+  ? `${window.TINDO_API_BASE || window.location.origin}/api`
+  : (window.API_BASE_URL || "http://localhost:5000/api");
+const BASE = API_BASE_URL.replace(/\/api\/?$/, "") || window.location.origin;
 const socket = io(BASE);
 
 // ✅ Auth

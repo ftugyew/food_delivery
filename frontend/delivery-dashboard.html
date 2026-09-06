@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tindo Delivery Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/api-config.js"></script>
   <!-- Mappls Advanced Maps SDK -->
   <script src="https://apis.mappls.com/advancedmaps/api/MAPPLS_API_KEY/map_sdk?v=3.0&layer=vector"></script>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
@@ -129,7 +130,9 @@
 </section>
 
 <script>
-  const BASE = "http://localhost:5000";
+  const BASE = (typeof window.TINDO_API_BASE !== "undefined")
+    ? (window.TINDO_API_BASE || window.location.origin)
+    : "http://localhost:5000";
   const socket = io(BASE);
   // Resolve agent id from logged-in user
   const loggedUser = (()=>{ try { return JSON.parse(localStorage.getItem('user')); } catch(_) { return null; } })();

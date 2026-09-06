@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/animations.css">
+  <script src="js/api-config.js"></script>
   <script src="js/script.js" defer></script>
   <script src="js/cart.js" defer></script>
   <style>
@@ -41,7 +42,9 @@
   <footer class="text-center text-gray-500 py-12">&copy; 2025 Tindo</footer>
 
 <script>
-const BASE = "http://localhost:5000";
+const BASE = (typeof window.TINDO_API_BASE !== "undefined")
+  ? window.TINDO_API_BASE
+  : "http://localhost:5000";
 
 async function loadAllRestaurants(){
   try{

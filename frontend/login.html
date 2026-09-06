@@ -6,6 +6,7 @@
   <title>Tindo — Login</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/api-config.js"></script>
   <script src="assets/js/redirect-to-localhost.js"></script>
   <script src="js/wish.js" defer></script>
   <link rel="stylesheet" href="css/animations.css">
@@ -173,9 +174,11 @@
   </div>
 
 <script>
-  const BASE = typeof SERVER !== 'undefined' && !SERVER.includes("localhost:5000")
-    ? SERVER
-    : "https://food-delivery-backend-cw3m.onrender.com";
+  const BASE = (typeof window.TINDO_API_BASE !== "undefined" && window.TINDO_API_BASE !== "")
+    ? window.TINDO_API_BASE
+    : (window.location.port === "5000" || window.location.hostname.includes("onrender.com")
+        ? ""
+        : (typeof SERVER !== "undefined" ? SERVER : "http://localhost:5000"));
 
   // 🥄 Spoon Mascot Animation Logic
   const spoon = document.getElementById("spoonMascot");

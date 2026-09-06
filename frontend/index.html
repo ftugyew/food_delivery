@@ -6,6 +6,7 @@
   <title>Tindo – Mana Tindi, Mana App</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/ui.css">
+  <script src="js/api-config.js"></script>
   <script src="assets/js/redirect-to-localhost.js"></script>
   <script src="js/wish.js" defer></script>
   <link rel="stylesheet" href="css/animations.css">
@@ -219,8 +220,11 @@
 <section id="restaurants" class="py-16 bg-white reveal">
   <div class="w-full px-2 md:px-6">
     <h2 id="restaurants-title" class="text-3xl font-bold text-green-700 mb-12 text-center">🔥 Top Restaurants Near You</h2>
-  <div id="restaurants-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-      <!-- Dynamic content will be loaded here -->
+  <div id="top-restaurants" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+      <!-- Top restaurants loaded here -->
+    </div>
+  <div id="restaurants-grid" class="hidden grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+      <!-- Filtered / search results -->
     </div>
     <div class="text-center mt-6">
       <a href="restaurants.html" class="inline-block bg-green-100 text-green-800 px-4 py-2 rounded-lg font-semibold hover:bg-green-200 transition">See more</a>
@@ -400,18 +404,36 @@
 function openCategoryPage(category) {
   window.location.href = `category.html?name=${encodeURIComponent(category)}`;
 }
-const BASE = "http://localhost:5000";
+const BASE = (typeof window.TINDO_API_BASE !== "undefined")
+  ? window.TINDO_API_BASE
+  : (/vercel\.app|netlify\.app/i.test(window.location.hostname)
+      ? "https://food-delivery-backend-cw3m.onrender.com"
+      : (window.location.port === "5000" || window.location.hostname.includes("onrender.com")
+          ? ""
+          : "http://localhost:5000"));
 let allRestaurants = [];
 let userLocation = null;
 let allMenuItems = [];
 let featuredRestaurants = [];
+let topRestaurants = [];
+
+function mediaUrl(path) {
+  if (!path) return `${BASE}/uploads/default.jpg`;
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${BASE}/uploads/${path}`;
+}
 
 async function loadRestaurants() {
   try {
     const res = await fetch(`${BASE}/api/restaurants`);
+    if (!res.ok) throw new Error(`restaurants ${res.status}`);
     const data = await res.json();
-    allRestaurants = data;
-    displayRestaurants(data);
+    allRestaurants = Array.isArray(data) ? data : [];
+    // Keep all-restaurants grid as backup when filters run
+    const grid = document.getElementById("restaurants-grid");
+    if (grid && !grid.classList.contains("hidden")) {
+      displayRestaurants(allRestaurants);
+    }
   } catch (err) {
     console.error("Error loading restaurants:", err);
   }
@@ -420,8 +442,9 @@ async function loadRestaurants() {
 async function loadMenuItems() {
   try {
     const res = await fetch(`${BASE}/api/admin/menu`);
+    if (!res.ok) throw new Error(`menu ${res.status}`);
     const data = await res.json();
-    allMenuItems = data;
+    allMenuItems = Array.isArray(data) ? data : [];
   } catch (err) {
     console.error("Error loading menu items:", err);
   }
@@ -429,18 +452,13 @@ async function loadMenuItems() {
 
 async function loadFeaturedRestaurants() {
   try {
-    console.log("Fetching featured restaurants from:", `${BASE}/api/featured-restaurants`);
     const res = await fetch(`${BASE}/api/featured-restaurants`);
-    console.log("Response status:", res.status);
-
     if (!res.ok) {
       throw new Error(`Failed to fetch featured restaurants: ${res.statusText}`);
     }
-
     const data = await res.json();
-    console.log("Featured restaurants fetched:", data);
-    featuredRestaurants = data;
-    displayFeaturedRestaurants(data);
+    featuredRestaurants = Array.isArray(data) ? data : [];
+    displayFeaturedRestaurants(featuredRestaurants);
   } catch (err) {
     console.error("Error loading featured restaurants:", err);
     const container = document.getElementById("featured-restaurants");
@@ -453,30 +471,49 @@ async function loadFeaturedRestaurants() {
 async function loadTopRestaurants() {
   try {
     const res = await fetch(`${BASE}/api/top-restaurants`);
+    if (!res.ok) throw new Error(`top restaurants ${res.status}`);
     const data = await res.json();
-    topRestaurants = data;
-    displayTopRestaurants(data);
+    topRestaurants = Array.isArray(data) ? data : [];
+    if (topRestaurants.length) {
+      displayTopRestaurants(topRestaurants);
+    } else if (allRestaurants.length) {
+      displayTopRestaurants(allRestaurants.map((r, i) => ({ ...r, restaurant_id: r.id, position: i + 1 })));
+    } else {
+      displayTopRestaurants([]);
+    }
   } catch (err) {
     console.error("Error loading top restaurants:", err);
+    // Fallback to all approved restaurants
+    if (allRestaurants.length) {
+      displayTopRestaurants(allRestaurants.map((r, i) => ({ ...r, restaurant_id: r.id, position: i + 1 })));
+    } else {
+      const container = document.getElementById("top-restaurants");
+      if (container) {
+        container.innerHTML = `<p class='text-red-500 text-center col-span-3'>Failed to load restaurants. Is the backend running on port 5000?</p>`;
+      }
+    }
   }
 }
 
 function displayTopRestaurants(top) {
   const container = document.getElementById("top-restaurants");
   if (!container) return;
+  container.classList.remove("hidden");
   if (!top.length) {
     container.innerHTML = `<p class="text-gray-500 text-center col-span-3">No top restaurants at the moment</p>`;
     return;
   }
   container.innerHTML = top.map(r => {
     const badge = r && Number.isFinite(Number(r.position)) && Number(r.position) > 0
-      ? `<div class=\"absolute top-3 left-3 bg-blue-400 text-blue-900 px-2 py-1 rounded-full text-xs font-bold z-10\">⭐ Top #${r.position}</div>`
+      ? `<div class="absolute top-3 left-3 bg-blue-400 text-blue-900 px-2 py-1 rounded-full text-xs font-bold z-10">⭐ Top #${r.position}</div>`
       : '';
     return `
-    <div class=\"card hover-lift rounded-2xl overflow-hidden cursor-pointer transition transform group relative reveal\" onclick=\"openRestaurant(${r.restaurant_id || r.id})\" role=\"button\" tabindex=\"0\">\n      ${badge}
-      <div class="h-48">
-        <img src="${BASE}/uploads/${r.image_url || 'default.jpg'}"
-             class="h-full w-full object-cover" alt="${r.name}">
+    <div class="card hover-lift rounded-2xl overflow-hidden cursor-pointer transition transform group relative reveal" onclick="openRestaurant(${r.restaurant_id || r.id})" role="button" tabindex="0">
+      ${badge}
+      <div class="h-48 relative">
+        <img src="${mediaUrl(r.image_url)}"
+             class="h-full w-full object-cover" alt="${r.name}"
+             onerror="this.src='${BASE}/uploads/default.jpg'">
       </div>
       <div class="p-6">
         <h3 class="text-xl font-bold text-gray-800 mb-2">${r.name}</h3>
@@ -500,13 +537,15 @@ function displayFeaturedRestaurants(featured) {
   }
   container.innerHTML = items.map(r => {
     const badge = r && Number.isFinite(Number(r.position)) && Number(r.position) > 0
-      ? `<div class=\"absolute top-3 left-3 bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full text-xs font-bold z-10\">⭐ Featured #${r.position}</div>`
+      ? `<div class="absolute top-3 left-3 bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full text-xs font-bold z-10">⭐ Featured #${r.position}</div>`
       : '';
     return `
-    <div class=\"card hover-lift rounded-2xl overflow-hidden cursor-pointer transition transform group relative reveal\" onclick=\"openRestaurant(${r.restaurant_id || r.id})\" role=\"button\" tabindex=\"0\">\n      ${badge}
-      <div class="h-48">
-        <img src="${BASE}/uploads/${r.image_url || 'default.jpg'}"
-             class="h-full w-full object-cover" alt="${r.name}">
+    <div class="card hover-lift rounded-2xl overflow-hidden cursor-pointer transition transform group relative reveal" onclick="openRestaurant(${r.restaurant_id || r.id})" role="button" tabindex="0">
+      ${badge}
+      <div class="h-48 relative">
+        <img src="${mediaUrl(r.image_url)}"
+             class="h-full w-full object-cover" alt="${r.name}"
+             onerror="this.src='${BASE}/uploads/default.jpg'">
       </div>
       <div class="p-6">
         <h3 class="text-xl font-bold text-gray-800 mb-2">${r.name}</h3>
@@ -524,7 +563,11 @@ function displayRestaurants(restaurants) {
   const container = document.getElementById("restaurants-grid");
   if (!container) return;
 
-  const items = (restaurants || []).slice(0,6);
+  container.classList.remove("hidden");
+  const topEl = document.getElementById("top-restaurants");
+  if (topEl) topEl.classList.add("hidden");
+
+  const items = (restaurants || []).slice(0, 12);
   if (!items.length) {
     container.innerHTML = `<p class="text-gray-500 text-center col-span-3">No restaurants found</p>`;
     return;
@@ -533,25 +576,27 @@ function displayRestaurants(restaurants) {
   container.innerHTML = items.map(r => `
     <div class="card hover-lift rounded-2xl overflow-hidden cursor-pointer transition transform group reveal" onclick="openRestaurant(${r.id})" data-ripple>
       <div class="h-48 relative">
-        <img src="${BASE}/uploads/${r.image_url || 'default.jpg'}"
-             class="h-full w-full object-cover" alt="${r.name}">
+        <img src="${mediaUrl(r.image_url)}"
+             class="h-full w-full object-cover" alt="${r.name}"
+             onerror="this.src='${BASE}/uploads/default.jpg'">
         <span class="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full md:hidden">New</span>
       </div>
       <div class="p-6">
         <h3 class="text-xl font-bold text-gray-800 mb-2">${r.name}</h3>
         <p class="text-gray-600 mb-3">${r.cuisine || 'Multi Cuisine'}</p>
         <div class="flex items-center justify-between">
-          <span class="text-green-600 font-semibold">⭐ ${(r.avg_rating || r.rating || '4.3')} · ${r.eta || '30'} mins · <span class="text-gray-500">2.5 km</span></span>
+          <span class="text-green-600 font-semibold">⭐ ${(r.avg_rating || r.rating || '4.3')} · ${r.eta || '30'} mins</span>
           <button class="btn btn-primary btn-sm" data-ripple>View Menu</button>
         </div>
       </div>
     </div>
   `).join("");
-// Scroll to restaurants section when clicking header link
-function scrollToRestaurants(e) {
-  e.preventDefault();
-  document.getElementById('restaurants').scrollIntoView({ behavior: 'smooth' });
 }
+
+function scrollToRestaurants(e) {
+  if (e) e.preventDefault();
+  const el = document.getElementById('restaurants') || document.getElementById('top-restaurants');
+  if (el) el.scrollIntoView({ behavior: 'smooth' });
 }
 
 async function filterByCategory(cuisine) {
@@ -671,11 +716,12 @@ function updateCartCount() {
   document.getElementById("cartCount").textContent = totalItems;
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  loadRestaurants();
+document.addEventListener("DOMContentLoaded", async () => {
+  updateCartCount();
+  await loadRestaurants();
   loadMenuItems();
   loadFeaturedRestaurants();
-  updateCartCount();
+  loadTopRestaurants();
   // Try showing popup banner
   initPopupBanner();
 });

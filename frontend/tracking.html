@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tindo – Order Tracking</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/api-config.js"></script>
   <script src="assets/js/redirect-to-localhost.js"></script>
   <!-- Mappls Advanced Maps SDK (for routed geometry) -->
   <script src="https://apis.mappls.com/advancedmaps/api/4fa2b3a7ff1eb85c0396d26f4060f70c/map_sdk?v=3.0&layer=vector"></script>
@@ -116,7 +117,7 @@
 
   <script>
     // Backend base
-    const SERVER = window.SERVER_BASE || 'http://localhost:5000';
+    const SERVER = window.SERVER_BASE || window.TINDO_API_BASE || window.location.origin || 'http://localhost:5000';
 
     function qs(name){ return new URLSearchParams(location.search).get(name); }
     const orderId = qs('orderId') || localStorage.getItem('last_order_id') || '1';
