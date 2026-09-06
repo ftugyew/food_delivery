@@ -173,7 +173,9 @@
   </div>
 
 <script>
-  const BASE = typeof SERVER !== 'undefined' ? SERVER : "http://localhost:5000";
+  const BASE = typeof SERVER !== 'undefined' && !SERVER.includes("localhost:5000")
+    ? SERVER
+    : "https://food-delivery-backend-cw3m.onrender.com";
 
   // 🥄 Spoon Mascot Animation Logic
   const spoon = document.getElementById("spoonMascot");
