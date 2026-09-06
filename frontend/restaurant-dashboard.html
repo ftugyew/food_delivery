@@ -168,7 +168,10 @@
 <div id="toast"></div>
 
 <script>
-const BASE = "http://localhost:5000";
+const API_BASE_URL = window.API_BASE_URL && !window.API_BASE_URL.includes("localhost:5000")
+  ? window.API_BASE_URL
+  : "https://food-delivery-backend-cw3m.onrender.com/api";
+const BASE = API_BASE_URL.replace(/\/api\/?$/, "");
 const socket = io(BASE);
 
 // ✅ Auth
@@ -178,7 +181,16 @@ if (!user || user.role !== "restaurant" || !token) {
   alert("Unauthorized! Please login again.");
   window.location.href = "login.html";
 }
-const restaurantId = user.restaurant_id;
+const restaurantId = Number(
+  user?.restaurant_id ||
+  user?.restaurantId ||
+  new URLSearchParams(window.location.search).get("restaurant_id")
+);
+if (!Number.isInteger(restaurantId) || restaurantId <= 0) {
+  alert("Restaurant account is not linked to a restaurant. Please contact admin.");
+  window.location.href = "login.html";
+  throw new Error("Missing restaurant ID");
+}
 
 // ✅ Toast function
 function showToast(message, success = true) {
